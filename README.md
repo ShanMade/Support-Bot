@@ -22,7 +22,6 @@ Google Gemini and Groq Whisper behind it, no database, no login, nothing written
 9. [Troubleshooting](#9-troubleshooting)
 10. [Limitations](#10-limitations)
 11. [Privacy](#11-privacy)
-12. [Presentation script](#12-presentation-script)
 
 ---
 
