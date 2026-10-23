@@ -1,0 +1,6 @@
+# VoiceNote AI - pinned dependencies (Python 3.11+)
+streamlit==1.66.1
+groq==1.7.0
+google-genai==2.33.0
+python-dotenv==1.2.4
+imageio-ffmpeg==0.6.0

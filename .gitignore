@@ -1,0 +1,41 @@
+# --- Secrets (never commit) -------------------------------------------------
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+credentials.json
+*.pem
+*.key
+
+# --- Audio / private data ---------------------------------------------------
+recordings/
+audio/
+*.wav
+*.mp3
+*.m4a
+*.webm
+*.ogg
+*.opus
+*.flac
+*.aac
+
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.python-version
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Editors / OS -----------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
