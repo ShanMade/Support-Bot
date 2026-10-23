@@ -28,7 +28,7 @@ Google Gemini and Groq Whisper behind it, no database, no login, nothing written
 
 ## 1. What it does
 
-| Step | What happens | Honest detail |
+| Step | What happens | Detail |
 | --- | --- | --- |
 | **Record** | Browser records a clip (`st.audio_input`) or you upload a file | One finished clip, **not** word-by-word streaming |
 | **Transcribe** | Gemini audio understanding, or Groq Whisper | Real provider output; no mock text anywhere |
@@ -356,24 +356,3 @@ quality and latency, the browser permission flow, provider rate limits.
 * Keys are never logged, rendered, or included in error messages.
 
 ---
-
-## 12. Presentation script
-
-> "VoiceNote AI is a Streamlit app that turns a recorded conversation into structured notes. The
-> browser records one clip, which goes to Gemini's multimodal audio model — it returns the
-> transcript with timestamps and, because it actually listens to the voices, anonymous speaker
-> turns: Speaker 1, Speaker 2. Alternatively Whisper handles the transcription and a second Gemini
-> pass supplies speaker turns, aligned by timestamp. The transcript is then sent as text to the LLM
-> with a strict JSON contract for summary, decisions and action items, and the prompt forbids
-> inventing anything. Everything is editable and exportable as Markdown. The honest limitation is
-> that it is clip-based rather than word-by-word streaming: I chose a reliable fallback over a
-> fragile live demo."
-
-Likely questions:
-
-* **Is the speaker labelling random?** No — it comes from an audio model analysing voice
-  characteristics, then renumbered by first appearance.
-* **Why two speech providers?** Reliability and speed; one key failure before class does not stop
-  the demo.
-* **What if a key is missing?** Only the affected step reports it; results already produced are kept.
-* **Why not local Whisper?** Heavy on CPU, no diarization, and unsuited to a free cloud host.
