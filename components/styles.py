@@ -121,10 +121,6 @@ def inject() -> None:
     box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03), 0 18px 44px -34px rgba(16, 24, 40, 0.4);
     padding: 1rem 1.05rem 0.95rem;
   }
-  div[data-testid="stVerticalBlock"]:has(> div .vn-card-head) > div:first-child,
-  div[data-testid="stVerticalBlock"]:has(> div .vn-empty) > div:first-child {
-    margin-bottom: 0;
-  }
   .vn-card-head {
     display: flex; align-items: center; justify-content: space-between;
     gap: 0.6rem; margin-bottom: 0.55rem;
