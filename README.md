@@ -33,10 +33,11 @@ app.py                      Streamlit UI only (layout, state, buttons, exports)
 │   ├── recording.py        microphone / upload widget -> Capture
 │   ├── transcript_view.py  speaker legend + transcript rows
 │   ├── notes_view.py       notes preview + inline editor + action-item table
-│   ├── layout.py           header, status pills, step bar, footer
-│   └── styles.py           small amount of CSS + speaker colours
+│   ├── layout.py           brand, status chip, workflow steps, card headers, footer
+│   └── styles.py           design tokens + CSS + speaker palettes
 └── services/               all provider-specific code
-    ├── config.py           .env / Streamlit secrets / session keys, model lists
+    ├── credentials.py      optional in-code keys/settings (edit this to run from code)
+    ├── config.py           .env -> secrets -> credentials.py, defaults, model lists
     ├── audio.py            validation, WAV duration, ffmpeg conversion, size limits
     ├── transcription.py    Gemini STT+diarization, Groq Whisper STT
     ├── diarization.py      Gemini speaker turns + overlap alignment to Whisper segments
@@ -73,7 +74,7 @@ until one of those changes.
 
 | Purpose | Provider | Model | Paid account? |
 | --- | --- | --- | --- |
-| Transcription + speaker diarization | Google Gemini API | any chat model your key exposes (default `gemini-2.5-flash`, pick from the sidebar list) | No — the free tier is enough for a class demo |
+| Transcription + speaker diarization | Google Gemini API | any chat model your key exposes (default `gemini-2.5-flash`; the model picker lists what your key can use) | No — the free tier is enough for a class demo |
 | Fast transcription (optional engine) | Groq | `whisper-large-v3-turbo` (default) or `whisper-large-v3` | No — free tier: 20 requests/min, 7.2k audio-seconds/min, 28.8k audio-seconds/day per model |
 | Note generation | Google Gemini API | same Gemini model | No |
 
@@ -83,14 +84,50 @@ until one of those changes.
 A Gemini key is required for speaker labels and for AI notes. A Groq key is optional and only
 adds a second transcription engine.
 
-**Never commit real keys.** Put them in `.env` (already git-ignored) or in Streamlit secrets.
-If a key is missing the app shows the exact variable name and a link instead of crashing, and
-you can paste keys into the sidebar for the current browser session only (they are held in
-memory, never written to disk, never displayed again).
+**Where keys live.** All configuration is backend-only - the UI never shows keys, provider
+names or environment variables. Pick whichever of these fits:
+
+1. `services/credentials.py` - constants at the top of the file (quickest for a local demo),
+2. `.env` (git-ignored) - recommended for a repo you push,
+3. Streamlit **Secrets** - required on Community Cloud.
+
+Resolution order is `.env` → Streamlit secrets → `services/credentials.py`, and nothing is
+ever logged or rendered. If a key is missing, the page stays usable and only the affected
+action reports what is needed.
 
 ---
 
-## 4. Run it locally (Windows PowerShell)
+## 4. Interface
+
+One column of cards, no sidebar, no API talk - everything backend-related is behind
+**Settings** or in this README.
+
+```
+┌ VoiceNote AI ────────────────────  ● Ready   [Settings] [New] ┐
+│  1 Capture · 2 Transcribe · 3 Notes · 4 Export                │
+│                                                               │
+│  ┌ Capture ─────────────────────────────────────────────────┐ │
+│  │  [Microphone | Upload]        ◉ record                    │ │
+│  └───────────────────────────────────────────────────────────┘ │
+│  ┌ Transcript ──────── 2 speakers · 6m 12s · 940 words ──────┐ │
+│  │  [Speaker 1 · 00:00] [Speaker 2 · 00:14]   (filter)       │ │
+│  │  S1  Speaker 1  00:00   Good morning everyone…             │ │
+│  └───────────────────────────────────────────────────────────┘ │
+│  ┌ AI Notes ──────────────┐  ┌ Export ───────────────────────┐ │
+│  │  title, summary,       │  │ [Notes .md] [Notes .txt]      │ │
+│  │  decisions, actions…   │  │ [Everything .md] [Audio]      │ │
+│  └────────────────────────┘  └───────────────────────────────┘ │
+└───────────────────────────────────────────────────────────────┘
+```
+
+Visual rules used throughout: light canvas (`#f7f8fc`), white cards with hairline borders and
+one soft shadow, a single indigo accent (`#4f46e5`), 14 px card radius, compact type scale, and
+speaker colours drawn from a fixed six-colour palette so a speaker keeps the same colour for the
+whole transcript.
+
+---
+
+## 5. Run it locally (Windows PowerShell)
 
 ```powershell
 # 1. Get the code
@@ -107,7 +144,8 @@ py -3.11 -m venv .venv
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 
-# 4. Configuration
+# 4. Configuration - either fill in services/credentials.py,
+#    or copy the template and use .env instead
 Copy-Item .env.example .env
 notepad .env          # paste GEMINI_API_KEY (and GROQ_API_KEY if you want Whisper)
 
@@ -132,14 +170,17 @@ to measure/compress audio. On Windows PowerShell the bundled binary works out of
 
 ---
 
-## 5. Configuration
+## 6. Configuration
 
-Read from environment variables (`.env`), then Streamlit secrets, then the sidebar.
+Backend only - nothing here appears in the interface.
+
+Read from environment variables (`.env`), then Streamlit secrets, then the constants in
+`services/credentials.py`. Anything left empty falls back to the defaults below.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | – | Google AI Studio key (required for diarization + notes) |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model; the sidebar lists what your key can use |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model; the in-app model picker lists what your key can use |
 | `GROQ_API_KEY` | – | Optional Groq key for the Whisper engine |
 | `GROQ_MODEL` | `whisper-large-v3-turbo` | or `whisper-large-v3` |
 | `TRANSCRIPTION_ENGINE` | `gemini` | `gemini` or `groq` |
@@ -151,11 +192,11 @@ Read from environment variables (`.env`), then Streamlit secrets, then the sideb
 | `LLM_TIMEOUT` | `180` | Seconds per note-generation request |
 
 `Settings.load()` accepts a `TRANSCRIPTION_ENGINE=groq` configuration even when no Groq key is
-present: it silently falls back to Gemini and the sidebar shows which engine will really run.
+present: it silently falls back to Gemini.
 
 ---
 
-## 6. Deploy to Streamlit Community Cloud
+## 7. Deploy to Streamlit Community Cloud
 
 1. Push this repository to GitHub (keep `.env` out of it).
 2. Go to <https://share.streamlit.io> → **Create app** → pick the repo, branch `main`,
@@ -185,7 +226,7 @@ Notes for the cloud:
 
 ---
 
-## 7. Microphone / browser notes
+## 8. Microphone / browser notes
 
 * Microphone capture requires a **secure context**: `https://` (Community Cloud, any tunnel)
   or `http://localhost`. Plain `http://192.168.x.x` will not work.
@@ -197,7 +238,7 @@ Notes for the cloud:
 
 ---
 
-## 8. Tests
+## 9. Tests
 
 Everything below was run in the development sandbox (no real API keys available there):
 
@@ -220,9 +261,12 @@ system instruction, Groq multipart fields (`model`, `verbose_json`), Gemini prom
 the transcript, and 403 → helpful `ProviderError`. This proves the integration code is wired
 correctly; it is not a substitute for a live call.
 
-The app was also driven headless with Streamlit's `AppTest`: it renders with no keys (showing
-guidance), keeps the transcript across reruns, offers "Transcribe again" only after a settings
-change, and keeps the transcript when note generation fails.
+The app was also driven headless with Streamlit's `AppTest` across the real UI states: empty,
+transcript-only, and transcript + notes. Checked there: every card renders, the source switcher
+toggles microphone/upload, the settings popover writes engine/model/language/diarization, the
+speaker filter re-renders the transcript, editing a field updates the preview immediately, all
+download buttons appear, the transcript survives reruns, "Apply new settings" only appears after
+a settings change, and a failed note generation keeps the transcript intact.
 
 **Needs your credentials / a real microphone (not testable in the sandbox):**
 
@@ -233,7 +277,7 @@ change, and keeps the transcript when note generation fails.
 
 ---
 
-## 9. Limitations (say these out loud in the demo)
+## 10. Limitations (say these out loud in the demo)
 
 1. **No word-by-word streaming.** Streamlit's audio widget uploads a finished clip; true
    streaming would need a WebRTC component and a streaming provider, which is less reliable
@@ -253,13 +297,13 @@ change, and keeps the transcript when note generation fails.
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
-| "No Google Gemini API key is configured" | Put `GEMINI_API_KEY=...` in `.env` (local) or Secrets (cloud), or paste it in the sidebar. Restart Streamlit after editing `.env`. |
+| "No Google Gemini API key is configured" | Put `GEMINI_API_KEY=...` in `.env` (local), in Streamlit Secrets (cloud) or in `services/credentials.py`, then restart Streamlit. |
 | "No Groq API key is configured" | Only needed for the Whisper engine; add `GROQ_API_KEY` or switch to Gemini. |
-| Errors on `gemini-…` model in the sidebar | The model name is not available to that key. Reload the page and pick a model the sidebar lists. |
+| Errors on a specific `gemini-…` model | That model is not available to your key. Reload the page; the model picker (Settings) only lists what the key exposes. |
 | Record button shows nothing / disabled | Site needs HTTPS or `localhost`, browser permission must be granted, and the mic must not be used by another app. |
 | "This audio file could not be decoded" | Convert to WAV/MP3/M4A; ffmpeg may be missing if `imageio-ffmpeg` did not install. Re-run `pip install -r requirements.txt`. |
 | Gemini 429 / Groq 429 | Free-tier rate limit. Wait a minute, shorten the clip, or switch engines. |
@@ -270,7 +314,7 @@ change, and keeps the transcript when note generation fails.
 
 ---
 
-## 11. Privacy and secrets
+## 12. Privacy and secrets
 
 * Audio is sent to the selected provider (Gemini and/or Groq) for processing. Nothing else
   leaves the machine.
@@ -278,12 +322,13 @@ change, and keeps the transcript when note generation fails.
   (only short-lived temp files during ffmpeg conversion, deleted immediately).
 * `.gitignore` excludes `.env`, `.streamlit/secrets.toml`, keys and audio files.
 * No API key is ever logged, displayed or included in an error message.
-* **Do not hardcode keys into `app.py` or any committed file.** Even for a course demo, a
-  public repo with a key gets scraped within minutes; use `.env` locally and Secrets on Cloud.
+* **Keep keys out of committed code.** `services/credentials.py` is handy for a private local
+  run, but if you push the repo the file goes with it - a key in a public repo is scraped within
+  minutes. Preferred: `.env` locally and Secrets on Cloud; both are already ignored by git.
 
 ---
 
-## 12. A 20-second explanation for class
+## 13. A 20-second explanation for class
 
 > "VoiceNote AI is a Streamlit app that turns a recorded conversation into structured notes.
 > The browser records one audio clip. It goes to Google Gemini's multimodal audio model, which
@@ -308,17 +353,19 @@ Likely questions and short answers:
 
 ---
 
-## 13. Fastest end-to-end check before class
+## 14. Fastest end-to-end check before class
 
-1. `pip install -r requirements.txt`, put the Gemini key in `.env`, `streamlit run app.py`.
+1. `pip install -r requirements.txt`, put the Gemini key in `.env` (or `services/credentials.py`),
+   then `streamlit run app.py`.
 2. Click the microphone, say two sentences in one voice, then two in another voice (or ask a
    classmate), and press stop.
-3. Within a few seconds: transcript with `Speaker 1` / `Speaker 2` chips and timestamps.
-4. Press **✨ Generate AI Notes**; check the summary, decisions and action items.
-5. Open **Edit notes**, change a decision or an action item, then download `*.md` and confirm
-   the edit is in the file (the preview updates as you type).
-6. Reload the page once to confirm nothing re-calls the API and nothing already generated is
-   lost (a reload starts a fresh session — that is expected).
+3. Within a few seconds: transcript with `Speaker 1` / `Speaker 2` chips, timestamps and a
+   speaker filter.
+4. Press **Generate notes**; check the summary, decisions and action items.
+5. Open **Edit notes**, change a decision or an action item - the preview updates immediately -
+   then download `*.md` and confirm the edit is in the file.
+6. Reload once: nothing is re-sent to the API and nothing already generated is lost (a reload
+   starts a fresh session, which is expected).
 
 Typical timing for a 60-second clip with Gemini: 5–15 s for transcription + diarization, 5–15 s
 for notes.

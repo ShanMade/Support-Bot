@@ -69,12 +69,28 @@ def _streamlit_secret(name: str) -> str | None:
     return None
 
 
+def _coded_setting(name: str) -> str | None:
+    """Read an optional constant from ``services/credentials.py``."""
+    try:
+        from . import credentials
+    except Exception:  # pragma: no cover - module always exists
+        return None
+    value = getattr(credentials, name, "")
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
 def get_setting(name: str, default: str | None = None) -> str | None:
-    """Environment first, then Streamlit secrets."""
+    """Environment first, then Streamlit secrets, then ``services/credentials.py``."""
     load_env()
     value = os.environ.get(name)
     if value is None or str(value).strip() == "":
         value = _streamlit_secret(name)
+    if value is None or str(value).strip() == "":
+        value = _coded_setting(name)
     if value is None or str(value).strip() == "":
         return default
     return str(value).strip()
@@ -154,9 +170,9 @@ class Settings:
             raise MissingKeyError(
                 "No Google Gemini API key is configured.",
                 hint=(
-                    "Add GEMINI_API_KEY to your .env file (local) or to the app secrets "
-                    "(Streamlit Cloud), or paste a key in the sidebar. Get one at "
-                    "https://aistudio.google.com/apikey - the free tier is enough for a demo."
+                    "Add GEMINI_API_KEY to your configuration (services/credentials.py, "
+                    ".env or the app secrets) and reload. A free key is available at "
+                    "https://aistudio.google.com/apikey."
                 ),
             )
         return self.gemini_api_key
@@ -166,9 +182,9 @@ class Settings:
             raise MissingKeyError(
                 "No Groq API key is configured.",
                 hint=(
-                    "Add GROQ_API_KEY to your .env file (local) or to the app secrets "
-                    "(Streamlit Cloud), or paste a key in the sidebar. Get one at "
-                    "https://console.groq.com/keys - a free account is enough for a demo."
+                    "Add GROQ_API_KEY to your configuration (services/credentials.py, "
+                    ".env or the app secrets) and reload. A free key is available at "
+                    "https://console.groq.com/keys."
                 ),
             )
         return self.groq_api_key

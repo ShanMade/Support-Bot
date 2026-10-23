@@ -1,4 +1,4 @@
-"""AI notes: readable preview plus inline editing."""
+"""AI notes: a clean preview plus an inline editor that keeps every field editable."""
 
 from __future__ import annotations
 
@@ -23,10 +23,11 @@ def _value(key: str, default: str) -> str:
 
 
 def _build_from_state(notes: Notes, version: int, action_rows: pd.DataFrame | None) -> Notes:
-    """Current widget values, falling back to the generated notes."""
+    """Widget values merged over the generated notes."""
     prefix = f"notes_{version}_"
+
     items: list[ActionItem] = []
-    if isinstance(action_rows, pd.DataFrame):
+    if action_rows is not None:
         for record in action_rows.to_dict("records"):
             task = str(record.get("Task") or "").strip()
             if not task:
@@ -38,7 +39,7 @@ def _build_from_state(notes: Notes, version: int, action_rows: pd.DataFrame | No
                     due=str(record.get("Due") or "").strip(),
                 )
             )
-    if action_rows is None:
+    else:
         items = notes.action_items
 
     return Notes(
@@ -58,26 +59,20 @@ def _build_from_state(notes: Notes, version: int, action_rows: pd.DataFrame | No
 def _editor(notes: Notes, version: int) -> pd.DataFrame:
     prefix = f"notes_{version}_"
     st.text_input("Title", value=notes.title, key=f"{prefix}title")
-    st.text_area("Executive summary", value=notes.summary, key=f"{prefix}summary", height=130)
+    st.text_area("Executive summary", value=notes.summary, key=f"{prefix}summary", height=120)
     st.text_area(
-        "Main topics (one per line)",
-        value=_join(notes.topics),
-        key=f"{prefix}topics",
-        height=110,
+        "Main topics (one per line)", value=_join(notes.topics), key=f"{prefix}topics", height=100
     )
     st.text_area(
         "Key takeaways (one per line)",
         value=_join(notes.key_points),
         key=f"{prefix}keypoints",
-        height=130,
+        height=120,
     )
     st.text_area(
-        "Decisions (one per line)",
-        value=_join(notes.decisions),
-        key=f"{prefix}decisions",
-        height=100,
+        "Decisions (one per line)", value=_join(notes.decisions), key=f"{prefix}decisions", height=96
     )
-    st.caption("Action items - edit cells, or add rows for follow-ups you agreed on.")
+    st.caption("Action items - edit the cells, or add rows for anything you agreed to.")
     frame = pd.DataFrame(
         [{"Task": item.task, "Owner": item.owner, "Due": item.due} for item in notes.action_items],
         columns=["Task", "Owner", "Due"],
@@ -98,77 +93,94 @@ def _editor(notes: Notes, version: int) -> pd.DataFrame:
         "Open questions (one per line)",
         value=_join(notes.open_questions),
         key=f"{prefix}questions",
-        height=100,
+        height=96,
     )
     st.text_area(
         "Cleaned transcript (Markdown)",
         value=notes.cleaned_transcript,
         key=f"{prefix}cleaned",
-        height=220,
+        height=200,
     )
     return edited_actions
 
 
-def _bullets(items: list[str], empty_text: str) -> None:
-    if items:
-        st.markdown("\n".join(f"- {item}" for item in items))
-    else:
-        st.markdown(f"<span style='color:#94a3b8;font-size:.86rem'>{html.escape(empty_text)}</span>",
-                    unsafe_allow_html=True)
+def _bullets(items: list[str]) -> str:
+    return "<ul>" + "".join(f"<li>{html.escape(item)}</li>" for item in items) + "</ul>"
+
+
+def _block(label: str, body_html: str) -> str:
+    return (
+        '<div class="vn-block">'
+        f'<div class="vn-block-label">{html.escape(label)}</div>{body_html}</div>'
+    )
 
 
 def _preview(notes: Notes) -> None:
-    title = html.escape(notes.title or "Meeting notes")
-    meta = ""
     if notes.generated_at:
-        meta = f"Generated {html.escape(notes.generated_at)} with {html.escape(notes.model or 'Gemini')}"
-    st.markdown(f'<div class="vn-note-title">{title}</div>', unsafe_allow_html=True)
-    if meta:
-        st.markdown(f'<div class="vn-note-meta">{meta}</div>', unsafe_allow_html=True)
+        meta = f"Generated {notes.generated_at}"
+        if notes.model:
+            meta += f" &middot; {notes.model}"
+        st.markdown(f'<div class="vn-note-meta">{html.escape(meta)}</div>', unsafe_allow_html=True)
 
+    blocks: list[str] = []
     if notes.summary:
-        st.markdown(notes.summary)
-
+        blocks.append(_block("Summary", f'<p>{html.escape(notes.summary)}</p>'))
     if notes.topics:
-        st.markdown("**Main topics**")
-        _bullets(notes.topics, "")
+        blocks.append(_block("Main topics", _bullets(notes.topics)))
     if notes.key_points:
-        st.markdown("**Key takeaways**")
-        _bullets(notes.key_points, "")
+        blocks.append(_block("Key takeaways", _bullets(notes.key_points)))
 
-    st.markdown("**Decisions**")
-    _bullets(notes.decisions, "No decisions were mentioned in this conversation.")
+    decisions = (
+        _bullets(notes.decisions)
+        if notes.decisions
+        else '<div class="vn-faint-line">No decisions were mentioned.</div>'
+    )
+    blocks.append(_block("Decisions", decisions))
 
-    st.markdown("**Action items**")
     if notes.action_items:
-        rows = ["| Task | Owner | Due |", "| --- | --- | --- |"]
+        cards = []
         for item in notes.action_items:
-            rows.append(
-                f"| {item.task} | {item.owner or 'not stated'} | {item.due or 'not stated'} |"
+            tags = ""
+            if item.owner:
+                tags += f'<span class="vn-tag">{html.escape(item.owner)}</span>'
+            if item.due:
+                tags += f'<span class="vn-tag due">{html.escape(item.due)}</span>'
+            tags_html = f'<div class="vn-tags">{tags}</div>' if tags else ""
+            cards.append(
+                '<div class="vn-action"><div class="box"></div><div>'
+                f'<div class="task">{html.escape(item.task)}</div>{tags_html}'
+                "</div></div>"
             )
-        st.markdown("\n".join(rows))
+        actions_html = "".join(cards)
     else:
-        st.markdown(
-            "<span style='color:#94a3b8;font-size:.86rem'>"
-            "No action items were mentioned in this conversation.</span>",
-            unsafe_allow_html=True,
-        )
+        actions_html = '<div class="vn-faint-line">No action items were mentioned.</div>'
+    blocks.append(_block("Action items", actions_html))
 
-    st.markdown("**Open questions**")
-    _bullets(notes.open_questions, "None raised.")
+    questions = (
+        _bullets(notes.open_questions)
+        if notes.open_questions
+        else '<div class="vn-faint-line">No open questions.</div>'
+    )
+    blocks.append(_block("Open questions", questions))
+
+    st.markdown("".join(blocks), unsafe_allow_html=True)
 
     if notes.cleaned_transcript:
-        st.markdown("**Cleaned transcript**")
-        with st.container(border=True):
+        with st.expander("Cleaned transcript"):
             st.markdown(notes.cleaned_transcript)
 
 
 def render(notes: Notes, version: int) -> Notes:
-    """Render the notes with an edit expander; returns the current (edited) notes."""
+    """Preview the notes, offer inline editing, and return the current values."""
     preview_slot = st.container()
-    with st.expander("Edit notes", expanded=False):
+    with st.expander("Edit notes", icon=":material/edit:"):
         action_rows = _editor(notes, version)
+
     edited = _build_from_state(notes, version, action_rows)
     with preview_slot:
+        st.markdown(
+            f'<div class="vn-note-title">{html.escape(edited.title or "Meeting notes")}</div>',
+            unsafe_allow_html=True,
+        )
         _preview(edited)
     return edited

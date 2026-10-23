@@ -1,4 +1,4 @@
-"""Read-only transcript rendering."""
+"""Transcript rendering: speaker legend, optional filter, and readable rows."""
 
 from __future__ import annotations
 
@@ -9,7 +9,25 @@ import streamlit as st
 from services.audio import human_duration
 from services.models import Transcript, format_timestamp
 
-from .styles import speaker_color
+from .styles import speaker_palette
+
+
+def _initials(speaker: str) -> str:
+    digits = "".join(ch for ch in speaker if ch.isdigit())
+    return f"S{digits}" if digits else "SP"
+
+
+def meta_html(transcript: Transcript) -> str:
+    bits: list[str] = []
+    speakers = transcript.speakers()
+    if transcript.diarized and len(speakers) > 1:
+        bits.append(f"<strong>{len(speakers)} speakers</strong>")
+    if transcript.duration:
+        bits.append(human_duration(transcript.duration))
+    if transcript.language:
+        bits.append(html.escape(transcript.language.upper()))
+    bits.append(f"{transcript.word_count()} words")
+    return " &middot; ".join(bits)
 
 
 def legend(transcript: Transcript) -> None:
@@ -18,61 +36,66 @@ def legend(transcript: Transcript) -> None:
         return
     chips = []
     for speaker in speakers:
-        color = speaker_color(speaker)
+        color, _bg = speaker_palette(speaker)
         first = next((s for s in transcript.segments if s.speaker == speaker), None)
         start = format_timestamp(first.start) if first else "--:--"
         chips.append(
             f'<span class="vn-chip" style="color:{color}">{html.escape(speaker)}'
-            f' <span style="opacity:.65">&middot; from {start}</span></span>'
+            f" <span>· {start}</span></span>"
         )
     st.markdown(f'<div class="vn-legend">{"".join(chips)}</div>', unsafe_allow_html=True)
 
 
-def meta_line(transcript: Transcript) -> str:
-    speakers = transcript.speakers()
-    bits = []
-    if transcript.stt_provider:
-        model = f" {transcript.stt_model}" if transcript.stt_model else ""
-        bits.append(f"{transcript.stt_provider.capitalize()}{model}")
-    if transcript.diarized:
-        bits.append(f"{len(speakers)} speakers detected")
-    else:
-        bits.append("no speaker detection")
-    if transcript.duration:
-        bits.append(human_duration(transcript.duration))
-    if transcript.language:
-        bits.append(f"language: {transcript.language}")
-    bits.append(f"{transcript.word_count()} words")
-    return " &middot; ".join(html.escape(bit) for bit in bits)
+def speaker_filter(speakers: list[str]) -> list[str]:
+    """Optional interactive filter. Returns the speakers to display."""
+    if len(speakers) < 2:
+        return speakers
+    selected = st.pills(
+        "Filter by speaker",
+        options=speakers,
+        selection_mode="multi",
+        default=speakers,
+        label_visibility="collapsed",
+    )
+    if selected is None:
+        return speakers
+    return selected
 
 
-def render_segments(transcript: Transcript, *, show_timestamps: bool = True) -> None:
+def render_segments(transcript: Transcript, visible_speakers: list[str] | None = None) -> None:
     rows: list[str] = []
-    for segment in transcript.grouped_segments():
+    segments = transcript.grouped_segments()
+    if visible_speakers is not None:
+        segments = [
+            segment
+            for segment in segments
+            if segment.speaker is None or segment.speaker in visible_speakers
+        ]
+
+    for segment in segments:
         text = html.escape(segment.text).replace("\n", "<br>")
         if not text:
             continue
+        color, background = speaker_palette(segment.speaker)
         speaker = segment.speaker or "Speaker"
-        color = speaker_color(segment.speaker)
-        time_html = (
-            f'<span class="vn-time">{format_timestamp(segment.start)}</span>'
-            if show_timestamps
-            else ""
-        )
         rows.append(
-            f'<div class="vn-seg">'
-            f'<div class="vn-seg-meta"><span class="vn-spk" style="color:{color}">'
-            f"{html.escape(speaker)}</span>{time_html}</div>"
-            f'<div class="vn-text">{text}</div>'
-            f"</div>"
+            '<div class="vn-trow">'
+            f'<div class="vn-avatar" style="color:{color};background:{background}">'
+            f"{html.escape(_initials(speaker))}</div>"
+            "<div>"
+            '<div class="vn-thead">'
+            f'<span class="vn-name" style="color:{color}">{html.escape(speaker)}</span>'
+            f'<span class="vn-ts">{format_timestamp(segment.start)}</span>'
+            "</div>"
+            f'<div class="vn-tt">{text}</div>'
+            "</div></div>"
         )
+
     if not rows:
         st.markdown(
-            '<div class="vn-empty">No speech detected in this recording.</div>',
+            '<div class="vn-faint-line">No segments to show for this filter.</div>',
             unsafe_allow_html=True,
         )
         return
-    st.markdown(
-        f'<div class="vn-transcript">{"".join(rows)}</div>',
-        unsafe_allow_html=True,
-    )
+
+    st.markdown(f'<div class="vn-tlist">{"".join(rows)}</div>', unsafe_allow_html=True)
