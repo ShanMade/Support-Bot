@@ -20,7 +20,7 @@ def brand() -> None:
   <div class="vn-mark">{MARK}</div>
   <div>
     <div class="vn-wordmark">VoiceNote AI</div>
-    <div class="vn-tagline">Speech &rarr; transcript &rarr; notes</div>
+    <div class="vn-tagline">Meetings, transcribed and summarised</div>
   </div>
 </div>
         """,
@@ -50,14 +50,26 @@ def steps(active: int) -> None:
 
 
 def kicker(label: str, meta_html: str = "") -> None:
-    """Section label with an optional right-hand metadata string."""
+    """Section label with an optional trailing metadata string."""
     meta = f'<span class="vn-section-meta">{meta_html}</span>' if meta_html else ""
     st.markdown(
-        f'<div style="display:flex;align-items:baseline;justify-content:space-between;'
-        f'gap:1rem;margin:0.1rem 0 0.5rem">'
+        f'<div style="display:flex;align-items:baseline;gap:0.65rem;'
+        f'margin:0.1rem 0 0.55rem">'
         f'<span class="vn-kicker">{html.escape(label)}</span>{meta}</div>',
         unsafe_allow_html=True,
     )
+
+
+def section(label: str, meta_html: str = "") -> st.delta_generator.DeltaGenerator:
+    """Section header row: label on the left, a slot for actions on the right.
+
+    Returns the right-hand container, so callers can place small buttons in the
+    header instead of floating them under the card.
+    """
+    left, right = st.columns([1.1, 1], vertical_alignment="center")
+    with left:
+        kicker(label, meta_html)
+    return right
 
 
 def card_marker() -> None:
@@ -74,7 +86,7 @@ def footer() -> None:
         """
 <div class="vn-footer">
   <span><b>VoiceNote AI</b> &middot; GenAI course demonstration</span>
-  <span>Speakers are anonymous voice clusters, never identities.</span>
+  <span>Audio stays in this session &middot; speakers are anonymous clusters</span>
 </div>
         """,
         unsafe_allow_html=True,

@@ -393,9 +393,10 @@ def render_intro() -> None:
     st.markdown(
         """
 <div class="vn-intro">
-  <h2>Record. Transcribe. Read the notes.</h2>
-  <p>Capture a conversation above and VoiceNote AI separates the voices, timestamps every
-     line, then writes the summary, decisions and action items - only from what was said.</p>
+  <h2>Turn a recording into notes you can send.</h2>
+  <p>Record or upload a conversation above. VoiceNote AI separates the voices, timestamps
+     every line, then writes the summary, decisions and action items - only from what was
+     actually said.</p>
 </div>
         """,
         unsafe_allow_html=True,
@@ -404,7 +405,22 @@ def render_intro() -> None:
 
 def render_transcript_section(settings: Settings, transcript: Transcript) -> None:
     layout.rule()
-    layout.kicker("Transcript", transcript_view.meta_html(transcript))
+    payload = current_audio()
+    stale = (
+        payload is not None
+        and transcription_signature(payload, settings) != st.session_state.processed_signature
+    )
+    actions = layout.section("Transcript", transcript_view.meta_html(transcript))
+    with actions, right_aligned():
+        with st.popover("Copy transcript", width="content"):
+            st.caption("Speaker labels, timestamps, plain text.")
+            st.code(transcript_text(transcript), language=None)
+        if stale and st.button("Re-transcribe", width="content"):
+            st.session_state.transcript_state = None
+            st.session_state.notes_state = None
+            st.session_state.processed_signature = None
+            st.session_state.transcription_error = None
+            st.rerun()
 
     with st.container(border=True):
         layout.card_marker()
@@ -424,27 +440,20 @@ def render_transcript_section(settings: Settings, transcript: Transcript) -> Non
 
         transcript_view.render_segments(transcript, visible)
 
-    payload = current_audio()
-    stale = (
-        payload is not None
-        and transcription_signature(payload, settings) != st.session_state.processed_signature
-    )
-    with right_aligned():
-        with st.popover("Copy transcript", width="content"):
-            st.caption("Speaker labels, timestamps, plain text.")
-            st.code(transcript_text(transcript), language=None)
-        if stale and st.button("Re-transcribe", width="content"):
-            st.session_state.transcript_state = None
-            st.session_state.notes_state = None
-            st.session_state.processed_signature = None
-            st.session_state.transcription_error = None
-            st.rerun()
-
 
 def render_notes_section(settings: Settings, transcript: Transcript) -> Notes | None:
     layout.rule()
-    layout.kicker("Notes")
     state = st.session_state.notes_state
+    notes = Notes.from_dict(state) if state else None
+    editing = bool(st.session_state.notes_edit and notes is not None)
+
+    meta = ""
+    if notes is not None:
+        bits = [bit for bit in (notes.generated_at, notes.model) if bit]
+        if bits:
+            meta = " &middot; ".join(html.escape(bit) for bit in bits)
+
+    actions = layout.section("Notes", meta)
 
     if st.session_state.notes_error:
         message, hint = st.session_state.notes_error
@@ -452,42 +461,36 @@ def render_notes_section(settings: Settings, transcript: Transcript) -> Notes | 
         if hint:
             st.caption(hint)
 
-    if not state:
-        with st.container(border=True):
-            layout.card_marker()
-            st.markdown(
-                '<div class="vn-empty" style="padding:0.35rem 0 0.15rem">Nothing written yet.</div>',
-                unsafe_allow_html=True,
-            )
-        with right_aligned():
+    if notes is None:
+        with actions, right_aligned():
             if st.button("Generate notes", type="primary", width="content"):
                 run_note_generation(transcript, settings)
                 st.rerun()
+        with st.container(border=True):
+            layout.card_marker()
+            st.markdown(
+                '<div class="vn-empty" style="padding:0.3rem 0 0.1rem">'
+                "No notes yet &mdash; generate them from the transcript above.</div>",
+                unsafe_allow_html=True,
+            )
         return None
 
-    notes = Notes.from_dict(state)
-    editing = bool(st.session_state.notes_edit)
-
     if editing:
+        with actions, right_aligned():
+            if st.button("Done editing", type="primary", width="content"):
+                st.session_state.notes_edit = False
+                st.rerun()
         with st.container(border=True):
             layout.card_marker()
             action_rows = notes_view.edit_form(notes, st.session_state.notes_version)
         edited = notes_view.current_values(notes, st.session_state.notes_version, action_rows)
         # Persist edits as they happen, so the read view and every export use them.
         st.session_state.notes_state = edited.to_dict()
-        with right_aligned():
-            if st.button("Done editing", type="primary", width="content"):
-                st.session_state.notes_edit = False
-                st.rerun()
     else:
-        with st.container(border=True):
-            layout.card_marker()
-            notes_view.read_view(notes)
-        edited = notes
-        with right_aligned():
+        with actions, right_aligned():
             with st.popover("Copy notes", width="content"):
                 st.caption("Markdown, including your edits.")
-                st.code(notes_markdown(edited, transcript), language="markdown")
+                st.code(notes_markdown(notes, transcript), language="markdown")
             if st.button("Edit", width="content"):
                 st.session_state.notes_edit = True
                 st.rerun()
@@ -496,6 +499,10 @@ def render_notes_section(settings: Settings, transcript: Transcript) -> Notes | 
                 st.session_state.notes_error = None
                 run_note_generation(transcript, settings)
                 st.rerun()
+        with st.container(border=True):
+            layout.card_marker()
+            notes_view.read_view(notes)
+        edited = notes
 
     return edited
 
@@ -566,12 +573,13 @@ def main() -> None:
     layout.steps(active)
     layout.rule("0.65rem")
 
+    if current_audio() is None and current_transcript() is None:
+        render_intro()
+
     render_capture(settings)
     transcript = maybe_transcribe(settings)
 
-    if transcript is None:
-        render_intro()
-    else:
+    if transcript is not None:
         render_transcript_section(settings, transcript)
         notes = render_notes_section(settings, transcript)
         render_export_section(transcript, notes)

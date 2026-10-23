@@ -1,28 +1,29 @@
 [theme]
-# "Paper & ink": warm off-white canvas, cobalt accent, editorial type.
+# "Product": near-white canvas, near-black ink, one cool blue accent.
 base = "light"
-primaryColor = "#1e5eff"
-backgroundColor = "#fbfaf8"
-secondaryBackgroundColor = "#f3f1ea"
-textColor = "#14161a"
-linkColor = "#1e5eff"
-borderColor = "#e3dfd4"
-baseRadius = "14px"
-buttonRadius = "10px"
+primaryColor = "#111318"
+backgroundColor = "#fcfcfd"
+secondaryBackgroundColor = "#f4f4f6"
+textColor = "#0f1115"
+linkColor = "#2563eb"
+borderColor = "#e7e7ec"
+dataframeBorderColor = "#e7e7ec"
+dataframeHeaderBackgroundColor = "#f6f6f8"
+baseRadius = "12px"
+buttonRadius = "9px"
 showWidgetBorder = true
 baseFontSize = 15
-font = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
-headingFont = "'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif"
-headingFontWeights = 600
+font = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, 'Helvetica Neue', Arial, sans-serif"
+headingFont = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, 'Helvetica Neue', Arial, sans-serif"
+headingFontWeights = 650
 codeFont = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace"
 
 [server]
 headless = true
-maxUploadSize = 250
 
 [browser]
 gatherUsageStats = false
 
 [client]
 toolbarMode = "minimal"
-showErrorDetails = "full"
+showErrorDetails = true
