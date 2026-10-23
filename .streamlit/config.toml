@@ -1,18 +1,29 @@
 [theme]
+# "Product": near-white canvas, near-black ink, one cool blue accent.
 base = "light"
-primaryColor = "#4f46e5"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f8fafc"
-textColor = "#0f172a"
-font = "sans serif"
+primaryColor = "#111318"
+backgroundColor = "#fcfcfd"
+secondaryBackgroundColor = "#f4f4f6"
+textColor = "#0f1115"
+linkColor = "#2563eb"
+borderColor = "#e7e7ec"
+dataframeBorderColor = "#e7e7ec"
+dataframeHeaderBackgroundColor = "#f6f6f8"
+baseRadius = "12px"
+buttonRadius = "9px"
+showWidgetBorder = true
+baseFontSize = 15
+font = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, 'Helvetica Neue', Arial, sans-serif"
+headingFont = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, 'Helvetica Neue', Arial, sans-serif"
+headingFontWeights = 650
+codeFont = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace"
 
 [server]
 headless = true
-maxUploadSize = 250
 
 [browser]
 gatherUsageStats = false
 
 [client]
 toolbarMode = "minimal"
-showErrorDetails = "full"
+showErrorDetails = true

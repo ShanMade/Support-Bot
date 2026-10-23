@@ -1,8 +1,8 @@
-"""Microphone capture / file upload controls.
+"""Microphone and file-upload controls.
 
-Streamlit's ``st.audio_input`` records in the browser and hands over one finished WAV
-clip when recording stops, so the transcript arrives right after you stop rather than
-word by word. The UI states that plainly instead of imitating a live stream.
+Streamlit's ``st.audio_input`` records in the browser and hands over one finished
+WAV clip when recording stops, so the transcript arrives right after you stop
+rather than word by word. The interface states that plainly.
 """
 
 from __future__ import annotations
@@ -23,18 +23,23 @@ class Capture:
     source: str  # "microphone" | "upload"
 
 
-def render_capture(*, nonce: int, max_upload_mb: int) -> Capture | None:
-    """Render the input controls and return whatever clip the user just provided."""
-    switcher, _spacer = st.columns([1.6, 4.2])
-    with switcher:
-        mode = st.segmented_control(
+def source_switch() -> str:
+    """Small segmented control; returns the chosen source label."""
+    return (
+        st.segmented_control(
             "Audio source",
-            options=["Microphone", "Upload"],
-            default="Microphone",
+            options=["Record", "Upload"],
+            default="Record",
             key="source_mode",
             label_visibility="collapsed",
-            width="stretch",
+            width="content",
         )
+        or "Record"
+    )
+
+
+def render_input(mode: str, *, nonce: int, max_upload_mb: int) -> Capture | None:
+    """Render the input widget for ``mode`` and return a fresh clip if provided."""
     capture: Capture | None = None
 
     if mode == "Upload":
@@ -50,25 +55,28 @@ def render_capture(*, nonce: int, max_upload_mb: int) -> Capture | None:
                 filename=uploaded.name or "upload.wav",
                 source="upload",
             )
-    else:
+        return capture
+
+    # Centred recorder: the widget itself is compact, so give it a middle column.
+    _, middle, _ = st.columns([1, 1.05, 1])
+    with middle:
         audio = st.audio_input(
             "Start recording",
             sample_rate=16000,
             key=f"mic_{nonce}",
             help="Your browser asks for microphone permission the first time.",
+            label_visibility="collapsed",
         )
-        st.markdown(
-            '<div class="vn-meta" style="margin-top:-0.35rem">'
-            "Tap the microphone, speak, then press stop. The clip is transcribed "
-            "immediately afterwards."
-            "</div>",
-            unsafe_allow_html=True,
+    st.markdown(
+        '<div class="vn-empty" style="text-align:center;padding-top:0.1rem">'
+        "Tap the microphone, speak, then press stop &mdash; the clip is transcribed straight after."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    if audio is not None:
+        capture = Capture(
+            data=audio.getvalue(),
+            filename=getattr(audio, "name", None) or "recording.wav",
+            source="microphone",
         )
-        if audio is not None:
-            capture = Capture(
-                data=audio.getvalue(),
-                filename=getattr(audio, "name", None) or "recording.wav",
-                source="microphone",
-            )
-
     return capture

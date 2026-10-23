@@ -1,27 +1,31 @@
-"""Design system for VoiceNote AI.
+"""Visual system for VoiceNote AI.
 
-Streamlit supplies the controls; this module supplies the look: a light canvas,
-white cards with hairline borders, one indigo accent, and compact typography.
+The palette, radii and typography come from Streamlit's own theme
+(``.streamlit/config.toml``): near-white canvas, near-black ink, cool blue
+accent, 12px radii, one sans stack. This module adds the few things a theme
+cannot express - the wordmark, section labels, card polish, the transcript
+grid and the notes layout - and nothing else, so the interface never fights
+the framework.
 """
 
 from __future__ import annotations
 
 import streamlit as st
 
+# (text colour, tint) - anonymous speaker clusters, never identities.
 SPEAKER_COLORS = [
-    ("#4f46e5", "#eef1ff"),  # indigo
-    ("#0f766e", "#e7f6f3"),  # teal
-    ("#b45309", "#fdf4e3"),  # amber
-    ("#be123c", "#fdeef1"),  # rose
-    ("#1d4ed8", "#eaf0ff"),  # blue
-    ("#6d28d9", "#f2edff"),  # violet
+    ("#2563eb", "#eef3ff"),
+    ("#0d9488", "#e7f7f4"),
+    ("#c2410c", "#fdf0e7"),
+    ("#db2777", "#fdecf4"),
+    ("#7c3aed", "#f2edff"),
+    ("#52627a", "#eef1f5"),
 ]
 
 
 def speaker_palette(speaker: str | None) -> tuple[str, str]:
-    """Return ``(text_colour, background)`` for an anonymous speaker label."""
     if not speaker:
-        return "#64748b", "#f1f3f8"
+        return "#8b8f99", "#f2f2f5"
     digits = "".join(ch for ch in speaker if ch.isdigit())
     index = (int(digits) - 1) if digits else 0
     return SPEAKER_COLORS[index % len(SPEAKER_COLORS)]
@@ -36,212 +40,211 @@ def inject() -> None:
         """
 <style>
   :root {
-    --vn-bg: #f7f8fc;
-    --vn-card: #ffffff;
-    --vn-border: #e9ebf2;
-    --vn-border-strong: #dfe3ee;
-    --vn-text: #111827;
-    --vn-body: #273043;
-    --vn-muted: #6b7280;
-    --vn-faint: #8b93a7;
-    --vn-accent: #4f46e5;
-    --vn-accent-strong: #4338ca;
-    --vn-accent-soft: #eef1ff;
-    --vn-radius: 14px;
+    --vn-canvas: #fcfcfd;
+    --vn-surface: #ffffff;
+    --vn-ink: #0f1115;
+    --vn-body: #3d4350;
+    --vn-muted: #8b8f99;
+    --vn-faint: #a8acb6;
+    --vn-line: #e7e7ec;
+    --vn-line-soft: #f0f0f3;
+    --vn-accent: #2563eb;
+    --vn-accent-soft: #eef3ff;
+    --vn-shadow: 0 1px 2px rgba(15, 17, 21, 0.04), 0 8px 24px -18px rgba(15, 17, 21, 0.22);
+    --vn-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+    --vn-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   }
 
   /* Canvas ------------------------------------------------------------- */
-  .stApp { background: var(--vn-bg); }
-  [data-testid="stHeader"] { display: none; }
-  [data-testid="stToolbar"] { display: none; }
-  .block-container {
-    max-width: 1180px;
-    padding: 1.6rem 2rem 3rem 2rem;
-  }
-  html, body, .stApp, [class*="st-"] {
-    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
-                 Roboto, "Helvetica Neue", Arial, sans-serif;
-  }
+  .stApp { background: var(--vn-canvas); }
+  [data-testid="stHeader"], [data-testid="stToolbar"] { display: none; }
   [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"] { display: none; }
+  .block-container {
+    max-width: 1120px;
+    padding: 1.35rem 2rem 3rem;
+  }
+  html, body, .stApp { font-family: var(--vn-sans); -webkit-font-smoothing: antialiased; }
+  h1, h2, h3, h4, h5 { letter-spacing: -0.014em; }
+  p, li, label, [data-testid="stMarkdownContainer"] { color: var(--vn-body); }
 
-  /* Header ------------------------------------------------------------- */
-  .vn-brand { display: flex; align-items: center; gap: 0.7rem; }
+  /* Top bar ------------------------------------------------------------ */
+  .vn-brand { display: flex; align-items: center; gap: 0.6rem; }
   .vn-mark {
-    width: 40px; height: 40px; border-radius: 12px; background: var(--vn-accent);
+    width: 32px; height: 32px; border-radius: 9px;
+    background: linear-gradient(160deg, #22252c 0%, #0f1115 100%);
     color: #fff; display: grid; place-items: center; flex: 0 0 auto;
-    box-shadow: 0 10px 20px -12px rgba(79, 70, 229, 0.9);
+    box-shadow: 0 1px 2px rgba(15, 17, 21, 0.24);
   }
-  .vn-name {
-    font-size: 1.22rem; font-weight: 700; letter-spacing: -0.02em;
-    color: var(--vn-text); line-height: 1.1;
+  .vn-wordmark {
+    font-size: 0.98rem; font-weight: 650; letter-spacing: -0.015em;
+    color: var(--vn-ink); line-height: 1.15;
   }
-  .vn-tagline { font-size: 0.78rem; color: var(--vn-muted); margin-top: 3px; }
-  .vn-rule { height: 1px; background: var(--vn-border); margin: 0.9rem 0 1rem; }
+  .vn-tagline { font-size: 0.75rem; color: var(--vn-muted); margin-top: 2px; }
 
-  /* Status chip -------------------------------------------------------- */
-  .vn-status {
-    display: inline-flex; align-items: center; gap: 0.42rem;
-    padding: 0.28rem 0.62rem; border-radius: 999px; background: #fff;
-    border: 1px solid var(--vn-border); font-size: 0.74rem; font-weight: 600;
-    color: #566076; white-space: nowrap;
+  .vn-statusline {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: var(--vn-surface); border: 1px solid var(--vn-line);
+    border-radius: 999px; padding: 0.2rem 0.6rem;
   }
-  .vn-status .dot {
-    width: 7px; height: 7px; border-radius: 50%; background: #16a34a;
-    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.12);
+  .vn-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #12b76a;
+    display: inline-block; box-shadow: 0 0 0 3px rgba(18, 183, 106, 0.12);
   }
-  .vn-status.busy .dot { background: #d97706; box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.14); }
-  .vn-status.done .dot { background: #4f46e5; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12); }
+  .vn-dot.busy { background: #f79009; box-shadow: 0 0 0 3px rgba(247, 144, 9, 0.14); }
+  .vn-dot.done { background: var(--vn-accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
+  .vn-status-text { font-size: 0.76rem; color: var(--vn-body); font-weight: 500; }
 
-  /* Workflow steps ----------------------------------------------------- */
-  .vn-steps { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; margin: 0.15rem 0 1.15rem; }
-  .vn-step {
-    display: inline-flex; align-items: center; gap: 0.42rem; padding: 0.32rem 0.58rem;
-    border-radius: 9px; font-size: 0.75rem; font-weight: 550; color: #6b7280;
-    border: 1px solid transparent;
+  /* Steps -------------------------------------------------------------- */
+  .vn-steps { display: flex; align-items: center; gap: 0.5rem; font-size: 0.76rem; }
+  .vn-steps .s { display: inline-flex; align-items: center; gap: 0.34rem; color: var(--vn-faint); }
+  .vn-steps .s::before {
+    content: ""; width: 5px; height: 5px; border-radius: 50%;
+    background: currentColor; opacity: 0.55;
   }
-  .vn-step .idx {
-    width: 18px; height: 18px; border-radius: 50%; background: #eceff6;
-    color: #7b8297; display: grid; place-items: center; font-size: 0.65rem; font-weight: 700;
+  .vn-steps .s.done { color: #9aa0ac; }
+  .vn-steps .s.done::before { opacity: 1; background: #b8bdc7; }
+  .vn-steps .s.active { color: var(--vn-ink); font-weight: 600; }
+  .vn-steps .s.active::before { opacity: 1; background: var(--vn-accent); }
+  .vn-steps .bar { width: 18px; height: 1px; background: var(--vn-line); }
+
+  /* Section labels ------------------------------------------------------ */
+  .vn-kicker {
+    font-size: 0.68rem; font-weight: 600; letter-spacing: 0.075em;
+    text-transform: uppercase; color: var(--vn-muted);
   }
-  .vn-step.active { background: #fff; border-color: #dcdefb; color: #3730a3; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04); }
-  .vn-step.active .idx { background: var(--vn-accent); color: #fff; }
-  .vn-step.done { color: #15803d; }
-  .vn-step.done .idx { background: #dcfce7; color: #15803d; }
-  .vn-sep { width: 18px; height: 1px; background: #e2e5ee; }
+  .vn-section-meta { font-size: 0.76rem; color: var(--vn-muted); }
+  .vn-section-meta b { color: var(--vn-body); font-weight: 600; }
+  .vn-mono { font-family: var(--vn-mono); font-variant-numeric: tabular-nums; }
 
   /* Cards --------------------------------------------------------------
-     Each card is a plain vertical block whose first element carries a marker
-     class (.vn-card-head / .vn-empty), so the styling never depends on
-     Streamlit-internal class names. */
-  div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"] .vn-card-head),
-  div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"] .vn-empty) {
-    background: var(--vn-card);
-    border: 1px solid var(--vn-border);
-    border-radius: var(--vn-radius);
-    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03), 0 18px 44px -34px rgba(16, 24, 40, 0.4);
-    padding: 1rem 1.05rem 0.95rem;
+     Streamlit draws the bordered container; this only refines it. */
+  div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"] .vn-cardsig) {
+    background: var(--vn-surface);
+    border: 1px solid var(--vn-line) !important;
+    border-radius: 14px !important;
+    box-shadow: var(--vn-shadow);
+    padding: 1.2rem 1.35rem 1.25rem !important;
   }
-  .vn-card-head {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 0.6rem; margin-bottom: 0.55rem;
-  }
-  .vn-card-title {
-    display: flex; align-items: center; gap: 0.45rem;
-    font-size: 0.95rem; font-weight: 660; color: var(--vn-text); letter-spacing: -0.01em;
-  }
-  .vn-card-title .badge {
-    font-size: 0.66rem; font-weight: 700; padding: 0.1rem 0.36rem; border-radius: 6px;
-    background: var(--vn-accent-soft); color: #4338ca; letter-spacing: 0.02em;
-  }
-  .vn-meta { font-size: 0.73rem; color: var(--vn-faint); }
-  .vn-meta strong { color: #5b6478; font-weight: 600; }
 
   /* Transcript --------------------------------------------------------- */
-  .vn-legend { display: flex; gap: 0.35rem; flex-wrap: wrap; margin: 0.15rem 0 0.55rem; }
+  .vn-legend { display: flex; gap: 0.3rem; flex-wrap: wrap; margin: 0.05rem 0 0.3rem; }
   .vn-chip {
-    font-size: 0.71rem; padding: 0.16rem 0.5rem; border-radius: 999px;
-    border: 1px solid currentColor; background: #fff; font-weight: 600;
+    font-size: 0.705rem; padding: 0.14rem 0.5rem; border-radius: 999px;
+    background: var(--vn-surface); border: 1px solid var(--vn-line);
+    font-weight: 600; letter-spacing: -0.005em;
   }
-  .vn-chip span { opacity: 0.6; font-weight: 500; }
-  .vn-tlist { margin-top: 0.15rem; }
+  .vn-chip span { color: var(--vn-muted); font-weight: 500; }
+  .vn-tlist { margin: 0.1rem 0 0; }
   .vn-trow {
-    display: grid; grid-template-columns: 32px 1fr; gap: 0.65rem;
-    padding: 0.5rem 0.55rem; border-radius: 10px;
+    display: grid; grid-template-columns: 88px 1fr; gap: 1.1rem;
+    padding: 0.6rem 0; border-top: 1px solid var(--vn-line-soft);
   }
-  .vn-trow:hover { background: #fafbff; }
-  .vn-avatar {
-    width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
-    font-size: 0.66rem; font-weight: 700; letter-spacing: 0.02em;
-  }
-  .vn-thead { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.08rem; }
-  .vn-name { font-size: 0.75rem; font-weight: 660; }
-  .vn-ts { font-size: 0.69rem; color: var(--vn-faint); font-variant-numeric: tabular-nums; }
-  .vn-tt { font-size: 0.885rem; line-height: 1.55; color: var(--vn-body); }
-  .vn-divider { height: 1px; background: #f0f2f7; margin: 0.55rem 0; }
+  .vn-trow:first-child { border-top: 0; padding-top: 0.15rem; }
+  .vn-tmeta { display: flex; flex-direction: column; gap: 2px; }
+  .vn-spk { font-size: 0.75rem; font-weight: 600; letter-spacing: -0.005em; }
+  .vn-ts { font-family: var(--vn-mono); font-size: 0.685rem; color: var(--vn-faint); }
+  .vn-tt { font-size: 0.925rem; line-height: 1.62; color: var(--vn-body); }
 
   /* Notes -------------------------------------------------------------- */
-  .vn-note-title { font-size: 1.04rem; font-weight: 700; letter-spacing: -0.015em; color: var(--vn-text); }
-  .vn-note-meta { font-size: 0.71rem; color: var(--vn-faint); margin: 0.1rem 0 0.6rem; }
-  .vn-block { margin-bottom: 0.85rem; }
+  .vn-note-title {
+    font-size: 1.32rem; font-weight: 650; letter-spacing: -0.02em;
+    color: var(--vn-ink); line-height: 1.28;
+  }
+  .vn-note-meta { font-size: 0.735rem; color: var(--vn-faint); margin-top: 0.28rem; }
+  .vn-notes { max-width: 70ch; }
+  .vn-note-title + .vn-note-meta + p { margin-top: 0.85rem; }
+  .vn-notes > p {
+    font-size: 0.935rem; line-height: 1.68; color: var(--vn-body);
+    margin: 0.85rem 0 0;
+  }
+  .vn-block { margin-top: 1.25rem; }
   .vn-block-label {
-    font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.07em;
-    font-weight: 700; color: #8b91a7; margin-bottom: 0.3rem;
+    font-size: 0.665rem; font-weight: 600; letter-spacing: 0.075em;
+    text-transform: uppercase; color: var(--vn-muted); margin-bottom: 0.42rem;
   }
-  .vn-block ul { margin: 0; padding-left: 1.05rem; }
-  .vn-block li { font-size: 0.875rem; line-height: 1.55; color: var(--vn-body); margin-bottom: 0.18rem; }
-  .vn-block p { font-size: 0.885rem; line-height: 1.6; color: var(--vn-body); margin: 0; }
-  .vn-faint-line { font-size: 0.83rem; color: var(--vn-faint); font-style: italic; }
-  .vn-action {
-    display: flex; gap: 0.55rem; align-items: flex-start;
-    padding: 0.5rem 0.6rem; border: 1px solid #eef0f7; border-radius: 10px;
-    background: #fbfcff; margin-bottom: 0.35rem;
-  }
-  .vn-action .box {
-    width: 15px; height: 15px; border-radius: 4px; border: 1.5px solid #c9cee2;
-    margin-top: 2px; flex: 0 0 auto;
-  }
-  .vn-action .task { font-size: 0.865rem; line-height: 1.45; color: var(--vn-body); }
-  .vn-tags { display: flex; gap: 0.25rem; margin-top: 0.25rem; flex-wrap: wrap; }
-  .vn-tag {
-    font-size: 0.66rem; padding: 0.07rem 0.38rem; border-radius: 5px;
-    background: var(--vn-accent-soft); color: #4338ca; font-weight: 600;
-  }
-  .vn-tag.due { background: #fef3c7; color: #92400e; }
+  .vn-block ul { margin: 0; padding-left: 1rem; }
+  .vn-block li { font-size: 0.915rem; line-height: 1.6; color: var(--vn-body); margin-bottom: 0.22rem; }
+  .vn-block li::marker { color: #c4c8d0; }
+  .vn-quiet { font-size: 0.885rem; color: var(--vn-faint); }
 
-  /* Empty states ------------------------------------------------------- */
-  .vn-empty { text-align: center; padding: 1.5rem 0.6rem 1.2rem; }
-  .vn-empty .icon {
-    width: 42px; height: 42px; border-radius: 12px; background: #f1f3fa;
-    display: grid; place-items: center; margin: 0 auto 0.65rem; color: #9aa1b4;
+  .vn-actions { display: flex; flex-direction: column; }
+  .vn-actions .a {
+    font-size: 0.915rem; line-height: 1.5; color: var(--vn-body);
+    padding: 0.42rem 0; border-top: 1px solid var(--vn-line-soft);
   }
-  .vn-empty .title { font-size: 0.9rem; font-weight: 620; color: #4b5568; margin-bottom: 0.2rem; }
-  .vn-empty .sub { font-size: 0.79rem; color: var(--vn-faint); line-height: 1.5; }
-  .vn-feature-strip { display: flex; gap: 0.4rem; justify-content: center; flex-wrap: wrap; margin-top: 0.75rem; }
-  .vn-feature {
-    font-size: 0.7rem; font-weight: 600; color: #6b7387; background: #fff;
-    border: 1px solid var(--vn-border); border-radius: 999px; padding: 0.2rem 0.55rem;
+  .vn-actions .a:first-child { border-top: 0; padding-top: 0; }
+  .vn-actions .tags { display: flex; gap: 0.28rem; margin-top: 0.3rem; flex-wrap: wrap; }
+  .vn-tag {
+    font-size: 0.68rem; padding: 0.06rem 0.42rem; border-radius: 6px; font-weight: 550;
+    background: var(--vn-accent-soft); color: #1d4ed8;
   }
+  .vn-tag.due { background: #f4f4f6; color: #5c6270; }
+
+  /* Intro / empty ------------------------------------------------------ */
+  .vn-intro { padding: 1.5rem 0 1.1rem; max-width: 58ch; }
+  .vn-intro h2 {
+    font-size: 1.52rem; font-weight: 650; letter-spacing: -0.028em; line-height: 1.22;
+    color: var(--vn-ink); margin: 0 0 0.42rem;
+  }
+  .vn-intro p { font-size: 0.945rem; line-height: 1.66; color: #6b7280; margin: 0; }
+  .vn-empty { font-size: 0.88rem; color: var(--vn-faint); padding: 0.4rem 0 0.2rem; }
 
   /* Widgets ------------------------------------------------------------ */
+  [data-testid="stIconMaterial"] { display: none !important; }
+  [data-testid="stExpander"] summary::after {
+    content: "\\25BE"; font-size: 0.66rem; color: #b3b7c0; margin-left: 0.4rem;
+  }
+  [data-testid="stExpander"] details[open] > summary::after { content: "\\25B4"; }
+  [data-testid="stPopover"] button::after {
+    content: "\\25BE"; font-size: 0.56rem; color: #b3b7c0; margin-left: 0.32rem;
+  }
+  [data-testid="stPopoverBody"] { border-radius: 14px !important; }
+  [data-testid="stPopoverBody"] [data-testid="stWidgetLabel"] p { font-size: 0.78rem; color: #5c6270; }
+  [data-testid="stPopoverBody"] h5 {
+    font-size: 0.665rem; font-weight: 600; letter-spacing: 0.075em;
+    text-transform: uppercase; color: var(--vn-muted); margin: 0.75rem 0 0.2rem;
+  }
   .stButton > button, .stDownloadButton > button {
-    border-radius: 10px; font-weight: 600; border: 1px solid var(--vn-border-strong);
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    font-weight: 550; font-size: 0.855rem; padding: 0.36rem 0.85rem;
+    box-shadow: 0 1px 1px rgba(15, 17, 21, 0.04);
   }
-  .stButton > button:hover, .stDownloadButton > button:hover {
-    border-color: #c9cdfa; color: var(--vn-accent-strong); background: #f8f9ff;
+  .stButton > button[kind="primary"] {
+    background: var(--vn-ink); border-color: var(--vn-ink); color: #fff;
   }
-  [data-testid="stBaseButton-primary"] {
-    background: var(--vn-accent); border-color: var(--vn-accent); color: #fff;
-    box-shadow: 0 8px 18px -12px rgba(79, 70, 229, 0.95);
+  .stButton > button[kind="primary"]:hover {
+    background: #272b33; border-color: #272b33; color: #fff;
   }
-  [data-testid="stBaseButton-primary"]:hover {
-    background: var(--vn-accent-strong); border-color: var(--vn-accent-strong); color: #fff;
+  .stButton > button[kind="secondary"] {
+    background: var(--vn-surface); border-color: var(--vn-line); color: var(--vn-ink);
   }
-  [data-testid="stAudioInput"] { max-width: 560px; }
+  .stButton > button[kind="secondary"]:hover,
+  .stDownloadButton > button:hover {
+    border-color: #cfd3da; background: #fafafb;
+  }
+  .stDownloadButton > button { background: var(--vn-surface); color: var(--vn-ink); }
+  [data-testid="stAudioInput"] { margin: 0 auto; }
   [data-testid="stFileUploaderDropzone"] {
-    border-radius: 12px; border: 1px dashed #d6dae8; background: #fbfcff;
+    background: #fbfbfc; border: 1px dashed #dcdfe4; border-radius: 12px;
   }
-  [data-testid="stPopover"] button { border-radius: 10px; font-weight: 600; }
-  [data-testid="stPopoverBody"] { padding: 0.35rem 0.15rem 0.1rem; }
-  [data-testid="stExpander"] details {
-    border: 1px solid var(--vn-border); border-radius: 12px; background: #fff;
-  }
-  [data-testid="stExpander"] summary { font-size: 0.83rem; font-weight: 600; color: #5b6478; }
-  div[data-baseweb="select"] > div { border-radius: 10px; }
-  .stTextInput input, .stTextArea textarea { border-radius: 10px; font-size: 0.88rem; }
+  [data-testid="stFileUploaderDropzone"] button { font-size: 0.82rem; border-radius: 8px; }
+  .stTextArea textarea, .stTextInput input { font-size: 0.9rem; line-height: 1.55; }
+  [data-testid="stSegmentedControl"] button { font-size: 0.83rem; font-weight: 550; }
+  [data-testid="stPills"] button { font-size: 0.79rem; font-weight: 550; }
+  [data-testid="stDataFrame"] { border-radius: 10px; }
 
   /* Footer ------------------------------------------------------------- */
   .vn-footer {
-    margin-top: 1.8rem; padding-top: 0.85rem; border-top: 1px solid var(--vn-border);
+    margin-top: 2.6rem; padding-top: 1rem; border-top: 1px solid var(--vn-line);
     display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
-    font-size: 0.72rem; color: var(--vn-faint);
+    font-size: 0.745rem; color: var(--vn-faint);
   }
-  .vn-footer strong { color: #6b7387; font-weight: 650; }
+  .vn-footer b { color: var(--vn-muted); font-weight: 600; }
 
-  @media (max-width: 920px) {
-    .block-container { padding: 1.1rem 1rem 2.2rem; }
-    .vn-trow { grid-template-columns: 28px 1fr; gap: 0.5rem; }
-    .vn-tagline { display: none; }
+  @media (max-width: 860px) {
+    .block-container { padding: 1rem 1.1rem 2.2rem; }
+    .vn-trow { grid-template-columns: 1fr; gap: 0.15rem; }
+    .vn-tmeta { flex-direction: row; gap: 0.5rem; align-items: baseline; }
   }
 </style>
         """,
