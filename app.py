@@ -2,9 +2,10 @@
 
 Run locally:  streamlit run app.py
 
-This file is UI only. Audio handling, transcription, diarization and note generation
-live in ``services/``; reusable widgets live in ``components/``. Backend settings
-(including API keys) live in ``services/credentials.py``, ``.env`` or Streamlit secrets.
+This file is layout only. Audio, transcription, diarization and note generation
+live in ``services/``; widgets live in ``components/``. Backend settings,
+including API keys, live in ``services/credentials.py``, ``.env`` or Streamlit
+secrets - never in the interface.
 """
 
 from __future__ import annotations
@@ -55,6 +56,7 @@ STATE_DEFAULTS = {
     "notes_state": None,
     "notes_version": 0,
     "notes_error": None,
+    "notes_edit": False,
     "rec_nonce": 0,
 }
 
@@ -79,6 +81,7 @@ def reset_results(*, clear_audio: bool = True) -> None:
     st.session_state.transcript_state = None
     st.session_state.notes_state = None
     st.session_state.notes_error = None
+    st.session_state.notes_edit = False
     st.session_state.transcription_error = None
     st.session_state.processed_signature = None
     if clear_audio:
@@ -101,15 +104,19 @@ def show_error(exc: Exception) -> None:
     message = getattr(exc, "message", str(exc))
     hint = getattr(exc, "hint", None)
     if isinstance(exc, MissingKeyError):
-        st.warning(message, icon="🔑")
+        st.warning(message)
     else:
         st.error(message)
     if hint:
-        st.info(hint)
+        st.caption(hint)
+
+
+def right_aligned() -> st.delta_generator.DeltaGenerator:
+    return st.container(horizontal=True, horizontal_alignment="right", gap="small")
 
 
 # ---------------------------------------------------------------------------
-# Header: brand, status, settings, new session
+# Settings (backend stays invisible; these are behavioural choices only)
 # ---------------------------------------------------------------------------
 @st.cache_data(ttl=600, show_spinner=False)
 def cached_models(api_key: str) -> tuple[str, ...]:
@@ -129,16 +136,14 @@ def gemini_model_options(settings: Settings) -> list[str]:
 
 
 def settings_popover(base: Settings) -> Settings:
-    with st.popover("Settings", width="stretch"):
+    with st.popover("Settings", width="content"):
         st.markdown("##### Transcription")
-        options = list(TRANSCRIPTION_ENGINES)
         engine = st.segmented_control(
             "Provider",
-            options=options,
+            options=list(TRANSCRIPTION_ENGINES),
             default=base.effective_engine,
             format_func=lambda value: "Gemini" if value == "gemini" else "Whisper",
             key="cfg_engine",
-            label_visibility="visible",
             width="stretch",
             help="Gemini returns the transcript and speaker labels together. Whisper is fast; "
             "speakers are added by a second pass over the same audio.",
@@ -148,31 +153,23 @@ def settings_popover(base: Settings) -> Settings:
         if st.session_state.get("cfg_gemini_model") not in model_options:
             st.session_state["cfg_gemini_model"] = model_options[0]
         gemini_model = st.selectbox(
-            "Gemini model",
-            options=model_options,
-            index=0,
-            key="cfg_gemini_model",
-            help="Listed from your API key.",
+            "Gemini model", options=model_options, index=0, key="cfg_gemini_model"
         )
 
         if st.session_state.get("cfg_groq_model") not in GROQ_MODELS:
             st.session_state["cfg_groq_model"] = GROQ_MODELS[0]
         groq_model = st.selectbox(
-            "Whisper model",
-            options=GROQ_MODELS,
-            key="cfg_groq_model",
-            help="whisper-large-v3-turbo is faster; whisper-large-v3 is slightly more accurate.",
+            "Whisper model", options=GROQ_MODELS, key="cfg_groq_model",
+            help="large-v3-turbo is faster; large-v3 is slightly more accurate.",
         )
 
-        st.markdown("##### Speakers")
+        st.markdown("##### Speakers & language")
         diarize = st.toggle(
             "Identify speakers",
             value=base.diarization != "off",
             key="cfg_diarize",
             help="Groups the audio into anonymous Speaker 1, Speaker 2, ... clusters.",
         )
-
-        st.markdown("##### Language")
         language = st.selectbox(
             "Spoken language",
             options=list(LANGUAGES),
@@ -190,8 +187,10 @@ def settings_popover(base: Settings) -> Settings:
     )
 
 
+# ---------------------------------------------------------------------------
+# Top bar
+# ---------------------------------------------------------------------------
 def pipeline_state() -> tuple[str, str, int]:
-    """Return (status label, status css state, active workflow step)."""
     transcript = current_transcript()
     notes = st.session_state.notes_state is not None
     if st.session_state.transcription_error:
@@ -205,22 +204,19 @@ def pipeline_state() -> tuple[str, str, int]:
     return "Transcript ready", "done", 2
 
 
-def render_header(base: Settings) -> Settings:
+def render_topbar(base: Settings) -> Settings:
     label, state, _step = pipeline_state()
-    brand_col, status_col, settings_col, new_col = st.columns(
-        [5.4, 1.7, 1.0, 1.3], vertical_alignment="center"
-    )
+    brand_col, status_col, action_col = st.columns([3.2, 1.4, 1.6], vertical_alignment="center")
     with brand_col:
         layout.brand()
     with status_col:
-        layout.status_chip(label, state)
-    with settings_col:
-        settings = settings_popover(base)
-    with new_col:
-        if st.button("New session", width="stretch", help="Clear this session"):
-            reset_results(clear_audio=True)
-            st.rerun()
-    st.markdown('<div class="vn-rule"></div>', unsafe_allow_html=True)
+        layout.status(label, state)
+    with action_col:
+        with right_aligned():
+            settings = settings_popover(base)
+            if st.button("New session", width="content", help="Clear this session"):
+                reset_results(clear_audio=True)
+                st.rerun()
     return settings
 
 
@@ -253,9 +249,9 @@ def handle_capture(capture: recording.Capture | None, settings: Settings) -> Non
     st.session_state.transcript_state = None
     st.session_state.notes_state = None
     st.session_state.notes_error = None
+    st.session_state.notes_edit = False
     st.session_state.transcription_error = None
     st.session_state.processed_signature = None
-    # Reset the recorder widget so the same clip is never processed twice.
     st.session_state.rec_nonce += 1
 
 
@@ -294,7 +290,7 @@ def run_transcription(payload: AudioPayload, settings: Settings) -> None:
     st.session_state.transcription_error = None
     st.session_state.notes_state = None
     st.session_state.notes_error = None
-    st.toast("Transcript ready", icon="✅")
+    st.toast("Transcript ready")
     st.rerun()
 
 
@@ -302,7 +298,7 @@ def render_transcription_error() -> None:
     message, hint = st.session_state.transcription_error
     st.error(message)
     if hint:
-        st.info(hint)
+        st.caption(hint)
     if st.button("Try again", type="primary", key="retry_transcription"):
         st.session_state.transcription_error = None
         st.session_state.processed_signature = None
@@ -348,28 +344,33 @@ def run_note_generation(transcript: Transcript, settings: Settings) -> None:
     st.session_state.notes_state = notes.to_dict()
     st.session_state.notes_version += 1
     st.session_state.notes_error = None
-    st.toast("Notes ready", icon="✨")
+    st.session_state.notes_edit = False
+    st.toast("Notes ready")
 
 
 # ---------------------------------------------------------------------------
-# Capture card
+# Sections
 # ---------------------------------------------------------------------------
-def render_capture_card(settings: Settings) -> None:
-    with st.container(border=False):
-        payload = current_audio()
-        meta = ""
-        if payload is not None:
-            label = st.session_state.source_label or payload.filename
-            if len(label) > 34:
-                label = f"{label[:31]}…"
-            meta = (
-                f"{html.escape(label)} &middot; {human_duration(payload.duration)} "
-                f"&middot; {payload.size_mb:.1f} MB"
-            )
-        layout.card_head("Capture", meta)
+def render_capture(settings: Settings) -> None:
+    payload = current_audio()
 
-        capture = recording.render_capture(
-            nonce=st.session_state.rec_nonce, max_upload_mb=settings.max_upload_mb
+    meta = ""
+    if payload is not None:
+        label = st.session_state.source_label or payload.filename
+        if len(label) > 30:
+            label = f"{label[:27]}…"
+        meta = (
+            f'<b>{html.escape(label)}</b> &middot; '
+            f'<span class="vn-mono">{human_duration(payload.duration)}</span> &middot; '
+            f"{payload.size_mb:.1f} MB"
+        )
+    layout.kicker("Capture", meta)
+
+    with st.container(border=True):
+        layout.card_marker()
+        mode = recording.source_switch()
+        capture = recording.render_input(
+            mode, nonce=st.session_state.rec_nonce, max_upload_mb=settings.max_upload_mb
         )
         handle_capture(capture, settings)
 
@@ -377,7 +378,8 @@ def render_capture_card(settings: Settings) -> None:
         if payload is None:
             return
 
-        st.markdown('<div class="vn-divider"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="vn-rule" style="margin:0.9rem 0 0.6rem"></div>',
+                    unsafe_allow_html=True)
         player_col, action_col = st.columns([4, 1], vertical_alignment="center")
         with player_col:
             st.audio(payload.data, format=payload.mime)
@@ -387,143 +389,133 @@ def render_capture_card(settings: Settings) -> None:
                 st.rerun()
 
 
-# ---------------------------------------------------------------------------
-# Results
-# ---------------------------------------------------------------------------
-def render_empty_hint() -> None:
-    with st.container(border=False):
-        st.markdown(
-            f"""
-<div class="vn-empty">
-  <div class="icon">{layout.WAVE_ICON}</div>
-  <div class="title">Your transcript will appear here</div>
-  <div class="sub">Record a conversation above. Speaker labels, timestamps and
-     structured notes follow automatically.</div>
-  <div class="vn-feature-strip">
-    <span class="vn-feature">Speaker labels</span>
-    <span class="vn-feature">Timestamps</span>
-    <span class="vn-feature">AI notes</span>
-    <span class="vn-feature">Markdown export</span>
-  </div>
+def render_intro() -> None:
+    st.markdown(
+        """
+<div class="vn-intro">
+  <h2>Record. Transcribe. Read the notes.</h2>
+  <p>Capture a conversation above and VoiceNote AI separates the voices, timestamps every
+     line, then writes the summary, decisions and action items - only from what was said.</p>
 </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        """,
+        unsafe_allow_html=True,
+    )
 
 
-def render_transcript_card(settings: Settings, transcript: Transcript) -> None:
-    with st.container(border=False):
-        layout.card_head("Transcript", transcript_view.meta_html(transcript))
+def render_transcript_section(settings: Settings, transcript: Transcript) -> None:
+    layout.rule()
+    layout.kicker("Transcript", transcript_view.meta_html(transcript))
+
+    with st.container(border=True):
+        layout.card_marker()
 
         for warning in transcript.warnings:
-            st.warning(warning, icon="⚠️")
+            st.warning(warning)
 
         if transcript.diarized:
-            transcript_view.legend(transcript)
-            visible = transcript_view.speaker_filter(transcript.speakers())
+            legend_col, filter_col = st.columns([1.4, 1], vertical_alignment="center")
+            with legend_col:
+                transcript_view.legend(transcript)
+            with filter_col:
+                visible = transcript_view.speaker_filter(transcript.speakers())
         else:
             visible = None
-            st.markdown(
-                '<div class="vn-meta" style="margin-bottom:.4rem">'
-                "Speaker labels are off for this transcript.</div>",
-                unsafe_allow_html=True,
-            )
+            st.caption("Speaker labels are off for this transcript.")
 
         transcript_view.render_segments(transcript, visible)
 
-        payload = current_audio()
-        stale = (
-            payload is not None
-            and transcription_signature(payload, settings) != st.session_state.processed_signature
-        )
-
-        st.markdown('<div class="vn-divider"></div>', unsafe_allow_html=True)
-        actions_left, actions_right = st.columns([1, 1], vertical_alignment="center")
-        with actions_left:
-            with st.popover("Copy transcript", width="stretch"):
-                st.caption("Plain text with speaker labels and timestamps.")
-                st.code(transcript_text(transcript), language=None)
-        with actions_right:
-            if stale:
-                if st.button(
-                    "Re-transcribe",
-                    width="stretch",
-                    help="Re-run transcription with the current engine, model and language.",
-                ):
-                    st.session_state.transcript_state = None
-                    st.session_state.notes_state = None
-                    st.session_state.processed_signature = None
-                    st.session_state.transcription_error = None
-                    st.rerun()
-            else:
-                st.caption("Speaker labels are anonymous voice clusters, not identities.")
+    payload = current_audio()
+    stale = (
+        payload is not None
+        and transcription_signature(payload, settings) != st.session_state.processed_signature
+    )
+    with right_aligned():
+        with st.popover("Copy transcript", width="content"):
+            st.caption("Speaker labels, timestamps, plain text.")
+            st.code(transcript_text(transcript), language=None)
+        if stale and st.button("Re-transcribe", width="content"):
+            st.session_state.transcript_state = None
+            st.session_state.notes_state = None
+            st.session_state.processed_signature = None
+            st.session_state.transcription_error = None
+            st.rerun()
 
 
-def render_notes_card(settings: Settings, transcript: Transcript) -> Notes | None:
-    with st.container(border=False):
-        layout.card_head("AI Notes")
-        if st.session_state.notes_error:
-            message, hint = st.session_state.notes_error
-            st.error(message)
-            if hint:
-                st.info(hint)
+def render_notes_section(settings: Settings, transcript: Transcript) -> Notes | None:
+    layout.rule()
+    layout.kicker("Notes")
+    state = st.session_state.notes_state
 
-        notes_state = st.session_state.notes_state
-        if not notes_state:
+    if st.session_state.notes_error:
+        message, hint = st.session_state.notes_error
+        st.error(message)
+        if hint:
+            st.caption(hint)
+
+    if not state:
+        with st.container(border=True):
+            layout.card_marker()
             st.markdown(
-                f"""
-<div class="vn-empty">
-  <div class="icon">{layout.SPARK_ICON}</div>
-  <div class="title">Turn this conversation into notes</div>
-  <div class="sub">Summary, decisions, action items and open questions - written
-     only from what was actually said.</div>
-</div>
-                """,
+                '<div class="vn-empty" style="padding:0.35rem 0 0.15rem">Nothing written yet.</div>',
                 unsafe_allow_html=True,
             )
-            if st.button("Generate notes", type="primary", width="stretch"):
+        with right_aligned():
+            if st.button("Generate notes", type="primary", width="content"):
                 run_note_generation(transcript, settings)
                 st.rerun()
-            return None
+        return None
 
-        notes = Notes.from_dict(notes_state)
-        edited = notes_view.render(notes, st.session_state.notes_version)
+    notes = Notes.from_dict(state)
+    editing = bool(st.session_state.notes_edit)
 
-        st.markdown('<div class="vn-divider"></div>', unsafe_allow_html=True)
-        regenerate_col, copy_col = st.columns([1, 1], vertical_alignment="center")
-        with regenerate_col:
-            if st.button(
-                "Regenerate",
-                width="stretch",
-                help="Ask for a fresh set of notes. Your edits are replaced.",
-            ):
+    if editing:
+        with st.container(border=True):
+            layout.card_marker()
+            action_rows = notes_view.edit_form(notes, st.session_state.notes_version)
+        edited = notes_view.current_values(notes, st.session_state.notes_version, action_rows)
+        # Persist edits as they happen, so the read view and every export use them.
+        st.session_state.notes_state = edited.to_dict()
+        with right_aligned():
+            if st.button("Done editing", type="primary", width="content"):
+                st.session_state.notes_edit = False
+                st.rerun()
+    else:
+        with st.container(border=True):
+            layout.card_marker()
+            notes_view.read_view(notes)
+        edited = notes
+        with right_aligned():
+            with st.popover("Copy notes", width="content"):
+                st.caption("Markdown, including your edits.")
+                st.code(notes_markdown(edited, transcript), language="markdown")
+            if st.button("Edit", width="content"):
+                st.session_state.notes_edit = True
+                st.rerun()
+            if st.button("Regenerate", width="content", help="Your edits are replaced."):
                 st.session_state.notes_state = None
                 st.session_state.notes_error = None
                 run_note_generation(transcript, settings)
                 st.rerun()
-        with copy_col:
-            with st.popover("Copy notes", width="stretch"):
-                st.caption("Notes as Markdown, including your edits.")
-                st.code(notes_markdown(edited, transcript), language="markdown")
-        return edited
+
+    return edited
 
 
-def render_export_card(transcript: Transcript | None, notes: Notes | None) -> None:
-    """Downloads for notes, transcript, bundle and the original clip."""
+def render_export_section(transcript: Transcript | None, notes: Notes | None) -> None:
     if transcript is None:
         return
     payload = current_audio()
     names = export_names(notes.title if notes and notes.title else "voicenote")
     source = st.session_state.source_label or "Recording"
 
+    layout.rule()
+    layout.kicker("Export", "your edits are included")
+
     downloads: list[tuple[str, bytes, str, str]] = []
     if notes is not None:
         downloads.append(
             ("Notes .md", notes_markdown(notes, transcript).encode(), names["notes_md"], "text/markdown")
         )
-        downloads.append(
-            ("Notes .txt", notes_text(notes).encode(), names["notes_txt"], "text/plain")
-        )
+        downloads.append(("Notes .txt", notes_text(notes).encode(), names["notes_txt"], "text/plain"))
         downloads.append(
             (
                 "Everything .md",
@@ -547,22 +539,17 @@ def render_export_card(transcript: Transcript | None, notes: Notes | None) -> No
     if payload is not None:
         downloads.append(("Audio clip", payload.data, payload.filename, payload.mime))
 
-    with st.container(border=False):
-        layout.card_head("Export", "Markdown or plain text &middot; your edits are included")
-        columns = st.columns(len(downloads), vertical_alignment="center")
-        for column, (label, data, file_name, mime) in zip(columns, downloads, strict=True):
-            column.download_button(label, data=data, file_name=file_name, mime=mime, width="stretch")
+    with st.container(horizontal=True, gap="small", wrap=True):
+        for label, data, file_name, mime in downloads:
+            st.download_button(label, data=data, file_name=file_name, mime=mime, width="content")
 
-        hints = []
-        if notes is None:
-            hints.append("Generate the notes to unlock the notes exports.")
-        if payload is not None:
-            hints.append(
-                "Audio stays in this session only and is never stored by the app - "
-                "downloading saves a copy to your computer."
-            )
-        for hint in hints:
-            st.caption(hint)
+    if notes is None:
+        st.caption("Generate the notes to unlock the notes exports.")
+    if payload is not None:
+        st.caption(
+            "Audio stays in this session only and is never stored by the app - "
+            "downloading saves a copy to your computer."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -573,38 +560,28 @@ def main() -> None:
     styles.inject()
 
     base = Settings.load()
-    settings = render_header(base)
+    settings = render_topbar(base)
+
     _label, _state, active = pipeline_state()
     layout.steps(active)
+    layout.rule("0.65rem")
 
-    render_capture_card(settings)
+    render_capture(settings)
     transcript = maybe_transcribe(settings)
 
     if transcript is None:
-        st.write("")
-        render_empty_hint()
+        render_intro()
     else:
-        st.write("")
-        left, right = st.columns([1.15, 1], gap="medium")
-        with left:
-            render_transcript_card(settings, transcript)
-        with right:
-            notes = render_notes_card(settings, transcript)
-        st.write("")
-        render_export_card(transcript, notes)
+        render_transcript_section(settings, transcript)
+        notes = render_notes_section(settings, transcript)
+        render_export_section(transcript, notes)
 
     with st.expander("About this demo"):
         st.markdown(
             """
-**How it works.** The browser records one clip. It goes to a speech model that returns
-the transcript with timestamps and speaker turns; a language model then writes the notes
-from that transcript only.
-
-**Good to know.**
-- Recording is clip-based: transcription starts when you press stop, not word by word.
-- Speakers are anonymous voice clusters (Speaker 1, Speaker 2) - never identities.
-- Notes contain only what was said. Sections that were never discussed say so.
-- Audio is processed for this session only and is never stored in the app.
+Recording is clip-based: transcription starts when you press stop, not word by word.
+Speakers are anonymous voice clusters (Speaker 1, Speaker 2) - never identities. Notes
+contain only what was said, and sections that were not discussed say so.
             """
         )
 
