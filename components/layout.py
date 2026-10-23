@@ -38,7 +38,8 @@ def brand() -> None:
 def status_chip(label: str, state: str = "ready") -> None:
     css = {"busy": "busy", "done": "done"}.get(state, "")
     st.markdown(
-        f'<div class="vn-status {css}"><span class="dot"></span>{html.escape(label)}</div>',
+        f'<div class="vn-status-wrap"><span class="vn-status {css}">'
+        f'<span class="dot"></span>{html.escape(label)}</span></div>',
         unsafe_allow_html=True,
     )
 

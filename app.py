@@ -10,6 +10,7 @@ live in ``services/``; reusable widgets live in ``components/``. Backend setting
 from __future__ import annotations
 
 import hashlib
+import html
 
 import streamlit as st
 
@@ -128,7 +129,7 @@ def gemini_model_options(settings: Settings) -> list[str]:
 
 
 def settings_popover(base: Settings) -> Settings:
-    with st.popover("Settings", icon=":material/tune:", width="stretch"):
+    with st.popover("Settings", width="stretch"):
         st.markdown("##### Transcription")
         options = list(TRANSCRIPTION_ENGINES)
         engine = st.segmented_control(
@@ -207,7 +208,7 @@ def pipeline_state() -> tuple[str, str, int]:
 def render_header(base: Settings) -> Settings:
     label, state, _step = pipeline_state()
     brand_col, status_col, settings_col, new_col = st.columns(
-        [5.2, 2.0, 1.15, 0.9], vertical_alignment="center"
+        [5.4, 1.7, 1.0, 1.3], vertical_alignment="center"
     )
     with brand_col:
         layout.brand()
@@ -216,7 +217,7 @@ def render_header(base: Settings) -> Settings:
     with settings_col:
         settings = settings_popover(base)
     with new_col:
-        if st.button("New", icon=":material/add:", width="stretch", help="Clear this session"):
+        if st.button("New session", width="stretch", help="Clear this session"):
             reset_results(clear_audio=True)
             st.rerun()
     st.markdown('<div class="vn-rule"></div>', unsafe_allow_html=True)
@@ -302,7 +303,7 @@ def render_transcription_error() -> None:
     st.error(message)
     if hint:
         st.info(hint)
-    if st.button("Try again", type="primary", icon=":material/refresh:", key="retry_transcription"):
+    if st.button("Try again", type="primary", key="retry_transcription"):
         st.session_state.transcription_error = None
         st.session_state.processed_signature = None
         st.rerun()
@@ -358,9 +359,12 @@ def render_capture_card(settings: Settings) -> None:
         payload = current_audio()
         meta = ""
         if payload is not None:
+            label = st.session_state.source_label or payload.filename
+            if len(label) > 34:
+                label = f"{label[:31]}…"
             meta = (
-                f"{st.session_state.source_label or payload.filename} &middot; "
-                f"{human_duration(payload.duration)} &middot; {payload.size_mb:.1f} MB"
+                f"{html.escape(label)} &middot; {human_duration(payload.duration)} "
+                f"&middot; {payload.size_mb:.1f} MB"
             )
         layout.card_head("Capture", meta)
 
@@ -378,7 +382,7 @@ def render_capture_card(settings: Settings) -> None:
         with player_col:
             st.audio(payload.data, format=payload.mime)
         with action_col:
-            if st.button("Start over", icon=":material/restart_alt:", width="stretch"):
+            if st.button("Start over", width="stretch"):
                 reset_results(clear_audio=True)
                 st.rerun()
 
@@ -427,19 +431,22 @@ def render_transcript_card(settings: Settings, transcript: Transcript) -> None:
 
         transcript_view.render_segments(transcript, visible)
 
+        payload = current_audio()
+        stale = (
+            payload is not None
+            and transcription_signature(payload, settings) != st.session_state.processed_signature
+        )
+
         st.markdown('<div class="vn-divider"></div>', unsafe_allow_html=True)
-        actions_left, actions_right = st.columns([1.2, 1.4], vertical_alignment="center")
+        actions_left, actions_right = st.columns([1, 1], vertical_alignment="center")
         with actions_left:
-            with st.popover("Copy", icon=":material/content_copy:", width="stretch"):
+            with st.popover("Copy transcript", width="stretch"):
                 st.caption("Plain text with speaker labels and timestamps.")
                 st.code(transcript_text(transcript), language=None)
         with actions_right:
-            payload = current_audio()
-            if payload is not None:
-                stale = transcription_signature(payload, settings) != st.session_state.processed_signature
-                if stale and st.button(
-                    "Apply new settings",
-                    icon=":material/refresh:",
+            if stale:
+                if st.button(
+                    "Re-transcribe",
                     width="stretch",
                     help="Re-run transcription with the current engine, model and language.",
                 ):
@@ -448,6 +455,8 @@ def render_transcript_card(settings: Settings, transcript: Transcript) -> None:
                     st.session_state.processed_signature = None
                     st.session_state.transcription_error = None
                     st.rerun()
+            else:
+                st.caption("Speaker labels are anonymous voice clusters, not identities.")
 
 
 def render_notes_card(settings: Settings, transcript: Transcript) -> Notes | None:
@@ -472,12 +481,7 @@ def render_notes_card(settings: Settings, transcript: Transcript) -> Notes | Non
                 """,
                 unsafe_allow_html=True,
             )
-            if st.button(
-                "Generate notes",
-                type="primary",
-                icon=":material/auto_awesome:",
-                width="stretch",
-            ):
+            if st.button("Generate notes", type="primary", width="stretch"):
                 run_note_generation(transcript, settings)
                 st.rerun()
             return None
@@ -490,7 +494,6 @@ def render_notes_card(settings: Settings, transcript: Transcript) -> Notes | Non
         with regenerate_col:
             if st.button(
                 "Regenerate",
-                icon=":material/refresh:",
                 width="stretch",
                 help="Ask for a fresh set of notes. Your edits are replaced.",
             ):
@@ -499,80 +502,67 @@ def render_notes_card(settings: Settings, transcript: Transcript) -> Notes | Non
                 run_note_generation(transcript, settings)
                 st.rerun()
         with copy_col:
-            with st.popover("Copy", icon=":material/content_copy:", width="stretch"):
+            with st.popover("Copy notes", width="stretch"):
                 st.caption("Notes as Markdown, including your edits.")
                 st.code(notes_markdown(edited, transcript), language="markdown")
         return edited
 
 
 def render_export_card(transcript: Transcript | None, notes: Notes | None) -> None:
+    """Downloads for notes, transcript, bundle and the original clip."""
     if transcript is None:
         return
     payload = current_audio()
     names = export_names(notes.title if notes and notes.title else "voicenote")
+    source = st.session_state.source_label or "Recording"
+
+    downloads: list[tuple[str, bytes, str, str]] = []
+    if notes is not None:
+        downloads.append(
+            ("Notes .md", notes_markdown(notes, transcript).encode(), names["notes_md"], "text/markdown")
+        )
+        downloads.append(
+            ("Notes .txt", notes_text(notes).encode(), names["notes_txt"], "text/plain")
+        )
+        downloads.append(
+            (
+                "Everything .md",
+                combined_markdown(transcript, notes, source=source).encode(),
+                names["bundle_md"],
+                "text/markdown",
+            )
+        )
+    else:
+        downloads.append(
+            (
+                "Transcript .md",
+                transcript_markdown(transcript, source=source).encode(),
+                names["transcript_md"],
+                "text/markdown",
+            )
+        )
+        downloads.append(
+            ("Transcript .txt", transcript_text(transcript).encode(), names["transcript_txt"], "text/plain")
+        )
+    if payload is not None:
+        downloads.append(("Audio clip", payload.data, payload.filename, payload.mime))
 
     with st.container(border=False):
-        layout.card_head("Export", "Markdown or plain text - your edits are included")
-        columns = st.columns(4, vertical_alignment="center")
-        if notes is not None:
-            columns[0].download_button(
-                "Notes .md",
-                data=notes_markdown(notes, transcript),
-                file_name=names["notes_md"],
-                mime="text/markdown",
-                icon=":material/description:",
-                width="stretch",
-            )
-            columns[1].download_button(
-                "Notes .txt",
-                data=notes_text(notes),
-                file_name=names["notes_txt"],
-                mime="text/plain",
-                icon=":material/description:",
-                width="stretch",
-            )
-            columns[2].download_button(
-                "Everything .md",
-                data=combined_markdown(
-                    transcript, notes, source=st.session_state.source_label or "Recording"
-                ),
-                file_name=names["bundle_md"],
-                mime="text/markdown",
-                icon=":material/download:",
-                width="stretch",
-            )
-            last = columns[3]
-        else:
-            columns[0].download_button(
-                "Transcript .md",
-                data=transcript_markdown(
-                    transcript, source=st.session_state.source_label or "Recording"
-                ),
-                file_name=names["transcript_md"],
-                mime="text/markdown",
-                icon=":material/description:",
-                width="stretch",
-            )
-            columns[1].download_button(
-                "Transcript .txt",
-                data=transcript_text(transcript),
-                file_name=names["transcript_txt"],
-                mime="text/plain",
-                icon=":material/description:",
-                width="stretch",
-            )
-            last = columns[3]
-            last.caption("Generate notes to unlock the notes exports.")
+        layout.card_head("Export", "Markdown or plain text &middot; your edits are included")
+        columns = st.columns(len(downloads), vertical_alignment="center")
+        for column, (label, data, file_name, mime) in zip(columns, downloads, strict=True):
+            column.download_button(label, data=data, file_name=file_name, mime=mime, width="stretch")
 
+        hints = []
+        if notes is None:
+            hints.append("Generate the notes to unlock the notes exports.")
         if payload is not None:
-            last.download_button(
-                "Audio",
-                data=payload.data,
-                file_name=payload.filename,
-                mime=payload.mime,
-                icon=":material/graphic_eq:",
-                width="stretch",
+            hints.append(
+                "Audio stays in this session only and is never stored by the app - "
+                "downloading saves a copy to your computer."
             )
+        for hint in hints:
+            st.caption(hint)
 
 
 # ---------------------------------------------------------------------------
@@ -603,7 +593,7 @@ def main() -> None:
         st.write("")
         render_export_card(transcript, notes)
 
-    with st.expander("About this demo", icon=":material/info:"):
+    with st.expander("About this demo"):
         st.markdown(
             """
 **How it works.** The browser records one clip. It goes to a speech model that returns

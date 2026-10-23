@@ -173,7 +173,7 @@ def _preview(notes: Notes) -> None:
 def render(notes: Notes, version: int) -> Notes:
     """Preview the notes, offer inline editing, and return the current values."""
     preview_slot = st.container()
-    with st.expander("Edit notes", icon=":material/edit:"):
+    with st.expander("Edit notes"):
         action_rows = _editor(notes, version)
 
     edited = _build_from_state(notes, version, action_rows)

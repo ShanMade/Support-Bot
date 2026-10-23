@@ -79,6 +79,7 @@ def inject() -> None:
   .vn-rule { height: 1px; background: var(--vn-border); margin: 0.9rem 0 1rem; }
 
   /* Status chip -------------------------------------------------------- */
+  .vn-status-wrap { display: flex; justify-content: center; }
   .vn-status {
     display: inline-flex; align-items: center; gap: 0.42rem;
     padding: 0.28rem 0.62rem; border-radius: 999px; background: #fff;
@@ -202,6 +203,25 @@ def inject() -> None:
     border: 1px solid var(--vn-border); border-radius: 999px; padding: 0.2rem 0.55rem;
   }
 
+  /* Icons ---------------------------------------------------------------
+     Interface copy is text only: the app ships no icon-font glyphs of its own.
+     Streamlit draws a few internal glyphs with Material Symbols (upload arrow,
+     expander and popover chevrons). When that font is unavailable - offline,
+     proxied or blocked by the browser - those render as literal names such as
+     "keyboard_arrow_down". Hide them and restore the affordances in plain CSS
+     so the interface never shows icon-name text. */
+  [data-testid="stIconMaterial"] { display: none !important; }
+
+  [data-testid="stExpander"] summary::after {
+    content: "▾"; font-size: 0.72rem; line-height: 1; color: #9aa1b4;
+    margin-left: 0.4rem; transition: transform 0.15s ease;
+  }
+  [data-testid="stExpander"] details[open] > summary::after { transform: rotate(180deg); }
+
+  [data-testid="stPopover"] button::after {
+    content: "▾"; font-size: 0.68rem; line-height: 1; color: #8b93a7; margin-left: 0.35rem;
+  }
+
   /* Widgets ------------------------------------------------------------ */
   .stButton > button, .stDownloadButton > button {
     border-radius: 10px; font-weight: 600; border: 1px solid var(--vn-border-strong);
@@ -229,6 +249,11 @@ def inject() -> None:
   [data-testid="stExpander"] summary { font-size: 0.83rem; font-weight: 600; color: #5b6478; }
   div[data-baseweb="select"] > div { border-radius: 10px; }
   .stTextInput input, .stTextArea textarea { border-radius: 10px; font-size: 0.88rem; }
+  [data-testid="stPopoverBody"] h5 {
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+    color: #8b93a7; margin: 0.55rem 0 0.3rem;
+  }
+  [data-testid="stPopoverBody"] [data-testid="stWidgetLabel"] p { font-size: 0.8rem; }
 
   /* Footer ------------------------------------------------------------- */
   .vn-footer {
