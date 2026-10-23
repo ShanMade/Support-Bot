@@ -5,6 +5,8 @@
 A compact GenAI project for a university / college course demonstration. Streamlit front end,
 Google Gemini and Groq Whisper behind it, no database, no login, nothing written to disk.
 
+**Repository:** <https://github.com/ShanMade/Voice-To-Note>
+
 ![VoiceNote AI system architecture](docs/architecture.png)
 
 ---
@@ -146,7 +148,7 @@ the PNG.
 ## 3. Project structure
 
 ```
-VoiceNote-AI/
+Voice-To-Note/
 ├── app.py                          # Streamlit UI + orchestration
 ├── components/
 │   ├── recording.py                # microphone / upload
@@ -168,8 +170,9 @@ VoiceNote-AI/
 │   ├── json_utils.py               # tolerant JSON parsing
 │   └── errors.py                   # message + hint errors
 ├── docs/
-│   ├── architecture.png
-│   └── render_architecture.py
+│   ├── architecture.png            # system diagram
+│   ├── request-lifecycle.png       # 8-step slide strip
+│   └── render_architecture.py      # regenerates both
 ├── tests/
 │   ├── test_units.py               # 24 tests, no network
 │   └── test_provider_contract.py   # 4 request-shape tests
@@ -187,7 +190,7 @@ VoiceNote-AI/
 ### Windows PowerShell
 
 ```powershell
-git clone https://github.com/<your-user>/Voice-To-Note.git
+git clone https://github.com/ShanMade/Voice-To-Note.git
 cd Voice-To-Note
 
 py -3.11 -m venv .venv
@@ -205,6 +208,9 @@ streamlit run app.py
 ### macOS / Linux
 
 ```bash
+git clone https://github.com/ShanMade/Voice-To-Note.git
+cd Voice-To-Note
+
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env && $EDITOR .env
@@ -271,8 +277,9 @@ Long recordings are compressed to mono 16 kHz MP3 before upload so they stay ins
 
 ## 7. Deployment (Streamlit Community Cloud)
 
-1. Push the repository to GitHub.
-2. <https://share.streamlit.io> → **Create app** → repo, branch `main`, main file `app.py`.
+1. The code is already at <https://github.com/ShanMade/Voice-To-Note> (branch `main`).
+2. <https://share.streamlit.io> → **Create app** → `ShanMade/Voice-To-Note` → branch `main`
+   → main file `app.py`.
 3. **Advanced settings → Python 3.11** (the repo ships `runtime.txt`).
 4. **Secrets**:
 
